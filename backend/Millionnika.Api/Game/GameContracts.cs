@@ -1,11 +1,12 @@
 namespace Millionnika.Api.Game;
 
-public sealed record ActionRequest(Guid RequestId);
+public sealed record ActionRequest(Guid RequestId, Guid ContractId);
 public sealed record TrainingRequest(Guid RequestId, string? Stat);
 
 public sealed record ContractResponse(
     Guid Id,
     string Name,
+    string Description,
     int CostNerve,
     decimal SuccessChance,
     long RewardCredits,

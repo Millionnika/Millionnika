@@ -748,6 +748,46 @@ a {
   margin-top: 48px;
 }
 
+.game-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.game-nav a {
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-decoration: none;
+}
+
+.game-nav a:hover, .game-nav a:focus-visible { color: var(--cyan); }
+
+.contract-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.contract-card {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(7, 11, 25, 0.52);
+}
+
+.contract-card h2 { margin: 0 0 8px; font-size: 1.1rem; }
+.contract-card p { margin: 0; color: var(--muted); line-height: 1.5; }
+
+@media (max-width: 650px) {
+  .contract-grid { grid-template-columns: 1fr; }
+  .game-nav { gap: 6px 12px; }
+}
+
 .status-card {
   display: flex;
   gap: 16px;

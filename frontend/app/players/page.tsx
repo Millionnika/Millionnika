@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { API_URL, getErrorMessage } from "@/lib/api";
+import { GameNav } from "@/components/GameNav";
 
 type PlayerSummary = { id: string; username: string; level: number; description: string };
 type SearchResult = { players: PlayerSummary[]; page: number; pageSize: number; totalCount: number; totalPages: number };
@@ -35,6 +36,7 @@ export default function PlayersPage() {
 
   return (
     <main><section className="game-panel players-panel">
+      <GameNav />
       <Link className="back-link" href="/profile">← Профиль</Link>
       <p className="eyebrow game-eyebrow">Городская сеть</p>
       <h1 className="game-title">Игроки</h1>

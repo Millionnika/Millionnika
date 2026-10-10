@@ -65,6 +65,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
             });
             entity.HasKey(contract => contract.Id);
             entity.Property(contract => contract.Name).HasMaxLength(120).IsRequired();
+            entity.Property(contract => contract.Description).HasMaxLength(500).IsRequired();
             entity.Property(contract => contract.SuccessChance).HasPrecision(5, 4);
         });
 

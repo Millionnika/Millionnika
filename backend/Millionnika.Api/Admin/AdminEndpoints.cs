@@ -14,6 +14,7 @@ public static class AdminEndpoints
         admin.MapPut("/players/{playerId:guid}/block", SetBlockAsync);
         admin.MapPut("/players/{playerId:guid}/resources", UpdateResourcesAsync);
         admin.MapGet("/contracts", GetContractsAsync);
+        admin.MapPost("/contracts", CreateContractAsync);
         admin.MapPut("/contracts/{contractId:guid}", UpdateContractAsync);
         admin.MapGet("/items", GetItemsAsync);
         admin.MapPut("/items/{itemId:guid}", UpdateItemAsync);
@@ -49,6 +50,11 @@ public static class AdminEndpoints
         IAdminService service, CancellationToken token) =>
         ToResult(await service.UpdateContractAsync(GetUserId(principal), contractId, request, token));
 
+    private static async Task<IResult> CreateContractAsync(
+        CreateContractRequest request, ClaimsPrincipal principal,
+        IAdminService service, CancellationToken token) =>
+        ToResult(await service.CreateContractAsync(GetUserId(principal), request, token), created: true);
+
     private static async Task<IResult> GetItemsAsync(IAdminService service, CancellationToken token) =>
         Results.Ok(await service.GetItemsAsync(token));
 
@@ -63,8 +69,10 @@ public static class AdminEndpoints
     private static async Task<IResult> GetAuditLogsAsync(IAdminService service, CancellationToken token) =>
         Results.Ok(await service.GetAuditLogsAsync(token));
 
-    private static IResult ToResult(AdminMutationResult result) =>
-        result.Succeeded ? Results.Ok(result) : Results.BadRequest(result);
+    private static IResult ToResult(AdminMutationResult result, bool created = false) =>
+        result.Succeeded
+            ? created ? Results.Json(result, statusCode: StatusCodes.Status201Created) : Results.Ok(result)
+            : Results.BadRequest(result);
 
     private static Guid GetUserId(ClaimsPrincipal principal) =>
         Guid.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!);

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
+import { GameNav } from "@/components/GameNav";
 
 type Resource = {
   current: number;
@@ -85,6 +86,7 @@ export default function ProfilePage() {
   return (
     <main>
       <section className="profile-panel">
+        <GameNav />
         <header className="profile-header">
           <div>
             <p className="eyebrow">Профиль игрока</p>

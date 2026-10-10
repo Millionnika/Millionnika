@@ -10,7 +10,7 @@ type PlayerDetails = Player & {
   level: number; credits: number; energy: number; maxEnergy: number; nerve: number; maxNerve: number;
   health: number; maxHealth: number; strength: number; speed: number; defense: number; dexterity: number; experience: number;
 };
-type Contract = { id: string; name: string; costNerve: number; successChance: number; rewardCredits: number; rewardExperience: number; isActive: boolean };
+type Contract = { id: string; name: string; description: string; costNerve: number; successChance: number; rewardCredits: number; rewardExperience: number; isActive: boolean };
 type Item = { id: string; name: string; description: string; price: number; type: string; effectResource: string; effectAmount: number; isActive: boolean };
 type ActionLog = { id: string; username: string; actionType: string; succeeded: boolean; message: string; createdAtUtc: string };
 type AuditLog = { id: string; adminUsername: string; action: string; targetType: string; targetId: string; oldValue: string; newValue: string; reason: string; createdAtUtc: string };
@@ -62,6 +62,19 @@ export default function AdminPage() {
     } catch (reason) { setError((reason as Error).message); }
   }
 
+  async function createContract(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setError(""); setMessage("");
+    try {
+      const response = await request("/api/admin/contracts", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: form.get("name"), description: form.get("description"), costNerve: Number(form.get("costNerve")), successChance: Number(form.get("successChance")), rewardCredits: Number(form.get("rewardCredits")), rewardExperience: Number(form.get("rewardExperience")), isActive: form.get("isActive") === "on", reason: form.get("reason") }),
+      });
+      setMessage((await response.json() as { message: string }).message); await refresh();
+    } catch (reason) { setError((reason as Error).message); }
+  }
+
   function updateResources(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -95,8 +108,8 @@ export default function AdminPage() {
         </div>}
       </AdminSection>
 
-      <AdminSection title="Контракты">{contracts.map((contract) => <form className="admin-editor admin-form" key={contract.id} onSubmit={(event) => { event.preventDefault(); const f = new FormData(event.currentTarget); void mutate(`/api/admin/contracts/${contract.id}`, { costNerve: Number(f.get("costNerve")), successChance: Number(f.get("successChance")), rewardCredits: Number(f.get("rewardCredits")), rewardExperience: Number(f.get("rewardExperience")), isActive: f.get("isActive") === "on", reason: f.get("reason") }); }}>
-        <h3>{contract.name}</h3><NumberField name="costNerve" label="Стоимость" value={contract.costNerve} min={1} /><NumberField name="successChance" label="Шанс (0–1)" value={contract.successChance} min={0} max={1} step="0.01" /><NumberField name="rewardCredits" label="Награда" value={contract.rewardCredits} min={0} max={MAX_ECONOMY_VALUE} /><NumberField name="rewardExperience" label="Опыт" value={contract.rewardExperience} min={0} max={MAX_ECONOMY_VALUE} /><CheckField name="isActive" label="Активен" checked={contract.isActive} /><ReasonField /><button className="primary-button" type="submit">Сохранить контракт</button>
+      <AdminSection title="Контракты"><form className="admin-editor admin-form" onSubmit={createContract}><h3>Новый контракт</h3><label>Название<input name="name" maxLength={120} required /></label><label>Описание<textarea name="description" maxLength={500} required /></label><NumberField name="costNerve" label="Стоимость" value={1} min={1} /><NumberField name="successChance" label="Шанс (0–1)" value={1} min={0} max={1} step="0.01" /><NumberField name="rewardCredits" label="Награда" value={0} min={0} max={MAX_ECONOMY_VALUE} /><NumberField name="rewardExperience" label="Опыт" value={0} min={0} max={MAX_ECONOMY_VALUE} /><CheckField name="isActive" label="Активен" checked /><ReasonField /><button className="primary-button" type="submit">Создать контракт</button></form>{contracts.map((contract) => <form className="admin-editor admin-form" key={contract.id} onSubmit={(event) => { event.preventDefault(); const f = new FormData(event.currentTarget); void mutate(`/api/admin/contracts/${contract.id}`, { name: f.get("name"), description: f.get("description"), costNerve: Number(f.get("costNerve")), successChance: Number(f.get("successChance")), rewardCredits: Number(f.get("rewardCredits")), rewardExperience: Number(f.get("rewardExperience")), isActive: f.get("isActive") === "on", reason: f.get("reason") }); }}>
+        <label>Название<input name="name" defaultValue={contract.name} maxLength={120} required /></label><label>Описание<textarea name="description" defaultValue={contract.description} maxLength={500} required /></label><NumberField name="costNerve" label="Стоимость" value={contract.costNerve} min={1} /><NumberField name="successChance" label="Шанс (0–1)" value={contract.successChance} min={0} max={1} step="0.01" /><NumberField name="rewardCredits" label="Награда" value={contract.rewardCredits} min={0} max={MAX_ECONOMY_VALUE} /><NumberField name="rewardExperience" label="Опыт" value={contract.rewardExperience} min={0} max={MAX_ECONOMY_VALUE} /><CheckField name="isActive" label="Активен" checked={contract.isActive} /><ReasonField /><button className="primary-button" type="submit">Сохранить контракт</button>
       </form>)}</AdminSection>
 
       <AdminSection title="Предметы">{items.map((item) => <form className="admin-editor admin-form" key={item.id} onSubmit={(event) => { event.preventDefault(); const f = new FormData(event.currentTarget); void mutate(`/api/admin/items/${item.id}`, { price: Number(f.get("price")), description: f.get("description"), effectResource: f.get("effectResource"), effectAmount: Number(f.get("effectAmount")), isActive: f.get("isActive") === "on", reason: f.get("reason") }); }}>

@@ -15,14 +15,25 @@ public sealed class GameActionService(
 {
     private const string ContractAction = "contract";
     private const string TrainingAction = "training";
+    private static readonly Guid LegacyContractId = Guid.Parse("1c92d38c-6aca-4d33-9044-a4a92f6a6101");
 
-    public async Task<ContractResponse?> GetContractAsync(CancellationToken cancellationToken) =>
+    public Task<ContractResponse?> GetContractAsync(CancellationToken cancellationToken) =>
+        dbContext.Contracts.AsNoTracking()
+            .Where(contract => contract.IsActive && contract.CostNerve > 0)
+            .OrderBy(contract => contract.Name).ThenBy(contract => contract.Id)
+            .Select(contract => new ContractResponse(
+                contract.Id, contract.Name, contract.Description, contract.CostNerve, contract.SuccessChance,
+                contract.RewardCredits, contract.RewardExperience))
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<ContractResponse>> GetContractsAsync(CancellationToken cancellationToken) =>
         await dbContext.Contracts.AsNoTracking()
             .Where(contract => contract.IsActive && contract.CostNerve > 0)
+            .OrderBy(contract => contract.Name).ThenBy(contract => contract.Id)
             .Select(contract => new ContractResponse(
-                contract.Id, contract.Name, contract.CostNerve, contract.SuccessChance,
+                contract.Id, contract.Name, contract.Description, contract.CostNerve, contract.SuccessChance,
                 contract.RewardCredits, contract.RewardExperience))
-            .SingleOrDefaultAsync(cancellationToken);
+            .ToListAsync(cancellationToken);
 
     public TrainingConfigResponse GetTrainingConfig()
     {
@@ -35,12 +46,25 @@ public sealed class GameActionService(
         Guid requestId,
         CancellationToken cancellationToken)
     {
+        return await ExecuteContractCoreAsync(userId, requestId, LegacyContractId, cancellationToken);
+    }
+
+    public Task<GameActionResult> ExecuteContractAsync(
+        Guid userId, Guid requestId, Guid contractId, CancellationToken cancellationToken) =>
+        ExecuteContractCoreAsync(userId, requestId, contractId, cancellationToken);
+
+    private async Task<GameActionResult> ExecuteContractCoreAsync(
+        Guid userId,
+        Guid requestId,
+        Guid contractId,
+        CancellationToken cancellationToken)
+    {
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var character = await LockCharacterAsync(userId, cancellationToken);
         var existing = await FindExistingAsync(userId, requestId, cancellationToken);
         if (existing is not null)
         {
-            if (existing.ActionType != ContractAction || existing.RequestSignature != ActionRequestSignature.Contract)
+            if (existing.ActionType != ContractAction || existing.RequestSignature != ActionRequestSignature.Contract(contractId))
                 return RequestConflict(requestId, character);
             resourceRecovery.Apply(character);
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -49,19 +73,22 @@ public sealed class GameActionService(
         }
         resourceRecovery.Apply(character);
 
-        var contract = await dbContext.Contracts.SingleOrDefaultAsync(
-            candidate => candidate.IsActive, cancellationToken);
+        var signature = ActionRequestSignature.Contract(contractId);
+        var contract = contractId == Guid.Empty
+            ? null
+            : await dbContext.Contracts.SingleOrDefaultAsync(
+                candidate => candidate.Id == contractId && candidate.IsActive, cancellationToken);
         ActionLog log;
 
         if (contract is null || !GameRules.IsValidContractCost(contract.CostNerve))
         {
-            log = CreateLog(userId, requestId, ContractAction, ActionRequestSignature.Contract, false,
+            log = CreateLog(userId, requestId, ContractAction, signature, false,
                 "Контракт сейчас недоступен. Ресурсы не списаны.", errorCode: "contract_unavailable");
         }
         else if (!GameRules.HasEnoughResource(character.Nerve, contract.CostNerve))
         {
-            log = CreateLog(userId, requestId, ContractAction, ActionRequestSignature.Contract, false,
-                "Недостаточно хладнокровия.", errorCode: "insufficient_nerve");
+            log = CreateLog(userId, requestId, ContractAction, signature, false,
+                $"Недостаточно хладнокровия. Не хватает {contract.CostNerve - character.Nerve}.", errorCode: "insufficient_nerve");
         }
         else
         {
@@ -75,7 +102,7 @@ public sealed class GameActionService(
                     !GameNumericLimits.TryAdd(character.Experience, contract.RewardExperience,
                         GameNumericLimits.MaxEconomyValue, out experience))
                 {
-                    log = CreateLog(userId, requestId, ContractAction, ActionRequestSignature.Contract, false,
+                    log = CreateLog(userId, requestId, ContractAction, signature, false,
                         "Награда превысила допустимый числовой предел. Ресурс не списан.",
                         errorCode: "numeric_limit");
                     dbContext.ActionLogs.Add(log);
@@ -92,7 +119,7 @@ public sealed class GameActionService(
             character.Experience = experience;
 
             log = CreateLog(
-                userId, requestId, ContractAction, ActionRequestSignature.Contract, succeeded,
+                userId, requestId, ContractAction, signature, succeeded,
                 succeeded ? "Дрон перехвачен. Награда получена." : "Дрон ушёл. Награды нет.",
                 nerveSpent: contract.CostNerve,
                 creditsAwarded: succeeded ? contract.RewardCredits : 0,

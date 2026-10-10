@@ -139,8 +139,8 @@ $testSettings = $null
 - `GET /api/auth/session` — проверка текущей сессии;
 - `GET /api/auth/csrf` — получение CSRF-токена и защитной cookie перед изменяющим запросом;
 - `GET /api/profile` — профиль только текущего авторизованного игрока;
-- `GET /api/game/contract` — параметры активного контракта из PostgreSQL;
-- `POST /api/game/contract/execute` — выполнить контракт;
+- `GET /api/game/contracts` — каталог активных контрактов из PostgreSQL;
+- `POST /api/game/contract/execute` — выполнить выбранный контракт (`requestId`, `contractId`);
 - `GET /api/game/training` — серверные параметры тренировки;
 - `POST /api/game/training/execute` — тренировать разрешённую характеристику;
 - `GET /api/game/logs` — последние игровые действия текущего игрока;
@@ -151,7 +151,8 @@ $testSettings = $null
 - `GET /api/admin/players` и `GET /api/admin/players/{id}` — игроки и профиль персонажа;
 - `PUT /api/admin/players/{id}/block` — блокировка или разблокировка;
 - `PUT /api/admin/players/{id}/resources` — изменение ресурсов с обязательной причиной;
-- `GET/PUT /api/admin/contracts` — просмотр и изменение контрактов;
+- `GET/POST /api/admin/contracts` — просмотр и создание контрактов;
+- `PUT /api/admin/contracts/{id}` — редактирование или отключение контракта; удаления нет;
 - `GET/PUT /api/admin/items` — просмотр и изменение предметов;
 - `GET /api/admin/action-logs` — журнал игровых действий;
 - `GET /api/admin/audit-logs` — журнал изменений администратора;
@@ -202,7 +203,7 @@ $testSettings = $null
 
 ## Миграции базы
 
-Миграции находятся в `backend/Millionnika.Api/Migrations`. При запуске backend выполняет только ещё не применённые миграции. Таблица `__EFMigrationsHistory` хранит их состояние. Миграция `PublicPlayerProfiles` добавляет текстовое описание, а `Friends` — связи друзей и заявок. Баланс и игровые ресурсы существующих аккаунтов не меняются.
+Миграции находятся в `backend/Millionnika.Api/Migrations`. При запуске backend выполняет только ещё не применённые миграции. Таблица `__EFMigrationsHistory` хранит их состояние. `ContractCatalog` добавляет описание и три стартовых контракта однократно через `ON CONFLICT DO NOTHING`; изменения администратора не перезаписываются. Баланс, ресурсы и история существующих аккаунтов не меняются.
 
 Для публичного размещения текущие HTTP-настройки не подходят. Требования к HTTPS, reverse proxy, cookie, CORS, общим ключам и нескольким экземплярам перечислены отдельно в [ARCHITECTURE](docs/ARCHITECTURE.md#https-и-будущее-размещение). Публичное размещение в текущем этапе не выполнялось.
 

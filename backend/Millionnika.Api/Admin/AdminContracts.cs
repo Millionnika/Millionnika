@@ -11,12 +11,16 @@ public sealed record AdminPlayerDetails(
 public sealed record SetBlockRequest(bool IsBlocked, string? Reason);
 public sealed record UpdateResourcesRequest(long Credits, int Energy, int Nerve, int Health, string? Reason);
 public sealed record UpdateContractRequest(
-    int CostNerve, decimal SuccessChance, long RewardCredits, long RewardExperience, bool IsActive, string? Reason);
+    int CostNerve, decimal SuccessChance, long RewardCredits, long RewardExperience, bool IsActive, string? Reason,
+    string? Name = null, string? Description = null);
+public sealed record CreateContractRequest(
+    string? Name, string? Description, int CostNerve, decimal SuccessChance,
+    long RewardCredits, long RewardExperience, bool IsActive, string? Reason);
 public sealed record UpdateItemRequest(
     long Price, string? Description, string? EffectResource, int EffectAmount, bool IsActive, string? Reason);
 
 public sealed record AdminContractResponse(
-    Guid Id, string Name, int CostNerve, decimal SuccessChance,
+    Guid Id, string Name, string Description, int CostNerve, decimal SuccessChance,
     long RewardCredits, long RewardExperience, bool IsActive);
 
 public sealed record AdminItemResponse(

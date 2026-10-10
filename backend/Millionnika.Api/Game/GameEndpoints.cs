@@ -9,6 +9,7 @@ public static class GameEndpoints
         var game = endpoints.MapGroup("/api/game").RequireAuthorization();
 
         game.MapGet("/contract", GetContractAsync);
+        game.MapGet("/contracts", GetContractsAsync);
         game.MapPost("/contract/execute", ExecuteContractAsync);
         game.MapGet("/training", GetTraining);
         game.MapPost("/training/execute", ExecuteTrainingAsync);
@@ -28,6 +29,11 @@ public static class GameEndpoints
     private static IResult GetTraining(IGameActionService service) =>
         Results.Ok(service.GetTrainingConfig());
 
+    private static async Task<IResult> GetContractsAsync(
+        IGameActionService service,
+        CancellationToken cancellationToken) =>
+        Results.Ok(await service.GetContractsAsync(cancellationToken));
+
     private static async Task<IResult> ExecuteContractAsync(
         ActionRequest request,
         ClaimsPrincipal principal,
@@ -39,7 +45,16 @@ public static class GameEndpoints
             return InvalidRequestId();
         }
 
-        var result = await service.ExecuteContractAsync(GetUserId(principal), request.RequestId, cancellationToken);
+        if (request.ContractId == Guid.Empty)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["contractId"] = ["Контракт не выбран."]
+            });
+        }
+
+        var result = await service.ExecuteContractAsync(
+            GetUserId(principal), request.RequestId, request.ContractId, cancellationToken);
         return result.ResourceRejected
             ? Results.Conflict(result.Response)
             : Results.Ok(result.Response);

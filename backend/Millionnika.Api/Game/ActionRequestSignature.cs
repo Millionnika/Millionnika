@@ -4,7 +4,7 @@ namespace Millionnika.Api.Game;
 
 public static class ActionRequestSignature
 {
-    public const string Contract = "contract:v1";
+    public static string Contract(Guid contractId) => $"contract:v2:{contractId:D}";
 
     public static string Training(TrainingStat stat) =>
         $"training:v1:{stat.ToString().ToLowerInvariant()}";

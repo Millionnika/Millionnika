@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
+import { GameNav } from "@/components/GameNav";
 
 type ListName = "friends" | "incoming" | "outgoing";
 type FriendItem = { relationId: string; playerId: string; username: string; level: number; createdAtUtc: string };
@@ -60,6 +61,7 @@ export default function FriendsPage() {
   }
 
   return <main><section className="game-panel friends-panel">
+    <GameNav />
     <Link className="back-link" href="/profile">← Профиль</Link>
     <p className="eyebrow game-eyebrow">Городская сеть</p>
     <h1 className="game-title">Друзья</h1>

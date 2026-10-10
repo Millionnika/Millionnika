@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
 import { getPendingAction } from "@/lib/pendingAction";
+import { GameNav } from "@/components/GameNav";
 
 const stats = [
   { value: "strength", label: "Сила" },
@@ -73,6 +74,7 @@ export default function ImplantCenterPage() {
   return (
     <main>
       <section className="game-panel">
+        <GameNav />
         <Link className="back-link" href="/profile">← Профиль</Link>
         <p className="eyebrow game-eyebrow">Имплант-центр</p>
         <h1 className="game-title">Тренировка</h1>

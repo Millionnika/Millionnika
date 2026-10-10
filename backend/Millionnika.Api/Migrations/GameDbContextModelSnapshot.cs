@@ -18,7 +18,7 @@ partial class GameDbContextModelSnapshot : ModelSnapshot
             .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
         NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-        BindRequestIdToOperation.BuildModel(modelBuilder);
+        ContractCatalog.BuildModel(modelBuilder);
 #pragma warning restore 612, 618
     }
 }

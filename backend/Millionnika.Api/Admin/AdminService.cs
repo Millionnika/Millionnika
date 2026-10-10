@@ -87,16 +87,42 @@ public sealed class AdminService(
     public async Task<IReadOnlyList<AdminContractResponse>> GetContractsAsync(CancellationToken cancellationToken) =>
         await dbContext.Contracts.AsNoTracking().OrderBy(contract => contract.Name)
             .Select(contract => new AdminContractResponse(
-                contract.Id, contract.Name, contract.CostNerve, contract.SuccessChance,
+                contract.Id, contract.Name, contract.Description, contract.CostNerve, contract.SuccessChance,
                 contract.RewardCredits, contract.RewardExperience, contract.IsActive))
             .ToListAsync(cancellationToken);
+
+    public async Task<AdminMutationResult> CreateContractAsync(
+        Guid adminId, CreateContractRequest request, CancellationToken cancellationToken)
+    {
+        if (!AdminRules.IsContractValid(request))
+            return InvalidContract();
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var contract = new Contract
+        {
+            Id = Guid.NewGuid(),
+            Name = request.Name!.Trim(),
+            Description = request.Description!.Trim(),
+            CostNerve = request.CostNerve,
+            SuccessChance = request.SuccessChance,
+            RewardCredits = request.RewardCredits,
+            RewardExperience = request.RewardExperience,
+            CooldownSeconds = 0,
+            IsActive = request.IsActive
+        };
+        dbContext.Contracts.Add(contract);
+        AddAudit(adminId, "contract_create", "contract", contract.Id.ToString(),
+            new { Exists = false }, ContractValues(contract), request.Reason!);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return AdminMutationResult.Success("Контракт создан.");
+    }
 
     public async Task<AdminMutationResult> UpdateContractAsync(
         Guid adminId, Guid contractId, UpdateContractRequest request, CancellationToken cancellationToken)
     {
         if (!AdminRules.IsContractValid(request))
-            return AdminMutationResult.Failure(
-                "Проверьте параметры контракта: стоимость должна быть больше нуля, награды — не более 1 триллиона.");
+            return InvalidContract();
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var contract = await dbContext.Contracts
             .FromSqlInterpolated($"SELECT * FROM contracts WHERE \"Id\" = {contractId} FOR UPDATE")
@@ -104,6 +130,8 @@ public sealed class AdminService(
         if (contract is null) return AdminMutationResult.Failure("Контракт не найден.");
 
         var oldValue = ContractValues(contract);
+        if (request.Name is not null) contract.Name = request.Name.Trim();
+        if (request.Description is not null) contract.Description = request.Description.Trim();
         contract.CostNerve = request.CostNerve;
         contract.SuccessChance = request.SuccessChance;
         contract.RewardCredits = request.RewardCredits;
@@ -179,9 +207,13 @@ public sealed class AdminService(
 
     private static object ContractValues(Contract contract) => new
     {
-        contract.CostNerve, contract.SuccessChance, contract.RewardCredits,
+        contract.Name, contract.Description, contract.CostNerve, contract.SuccessChance, contract.RewardCredits,
         contract.RewardExperience, contract.IsActive
     };
+
+    private static AdminMutationResult InvalidContract() =>
+        AdminMutationResult.Failure(
+            "Проверьте название, описание и параметры контракта: стоимость должна быть больше нуля, награды — не более 1 триллиона.");
 
     private static object ItemValues(Item item) => new
     {

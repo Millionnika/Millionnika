@@ -20,7 +20,19 @@ public static class AdminRules
     public static bool IsContractValid(UpdateContractRequest request) =>
         GameRules.IsValidContractCost(request.CostNerve) && request.SuccessChance is >= 0 and <= 1 &&
         request.RewardCredits is >= 0 and <= GameNumericLimits.MaxEconomyValue &&
+        request.RewardExperience is >= 0 and <= GameNumericLimits.MaxEconomyValue &&
+        (request.Name is null || IsContractTextValid(request.Name, 120)) &&
+        (request.Description is null || IsContractTextValid(request.Description, 500)) &&
+        IsReasonValid(request.Reason);
+
+    public static bool IsContractValid(CreateContractRequest request) =>
+        IsContractTextValid(request.Name, 120) && IsContractTextValid(request.Description, 500) &&
+        GameRules.IsValidContractCost(request.CostNerve) && request.SuccessChance is >= 0 and <= 1 &&
+        request.RewardCredits is >= 0 and <= GameNumericLimits.MaxEconomyValue &&
         request.RewardExperience is >= 0 and <= GameNumericLimits.MaxEconomyValue && IsReasonValid(request.Reason);
+
+    private static bool IsContractTextValid(string? value, int maximum) =>
+        value?.Trim().Length is >= 1 && value.Trim().Length <= maximum;
 
     public static bool IsItemValid(UpdateItemRequest request) =>
         request.Price is >= 0 and <= GameNumericLimits.MaxEconomyValue &&

@@ -210,7 +210,7 @@ public sealed class HttpSecurityTests : IAsyncLifetime
         foreach (var (path, body) in new (string, object)[]
         {
             ("/api/game/training/execute", new { requestId = Guid.NewGuid(), stat = "strength" }),
-            ("/api/game/contract/execute", new { requestId = Guid.NewGuid() }),
+            ("/api/game/contract/execute", new { requestId = Guid.NewGuid(), contractId = "1c92d38c-6aca-4d33-9044-a4a92f6a6101" }),
             ("/api/game/shop/buy", new { requestId = Guid.NewGuid(), itemId = "11111111-1111-1111-1111-111111111001", quantity = 1 }),
             ("/api/game/inventory/use", new { requestId = Guid.NewGuid(), itemId = "11111111-1111-1111-1111-111111111001", quantity = 1 })
         })
@@ -335,7 +335,7 @@ public sealed class HttpSecurityTests : IAsyncLifetime
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(value => value.Credits, GameNumericLimits.MaxEconomyValue)
                     .SetProperty(value => value.Experience, 20));
-            var contract = await setup.Contracts.SingleAsync();
+            var contract = await setup.Contracts.SingleAsync(value => value.Id == Guid.Parse("1c92d38c-6aca-4d33-9044-a4a92f6a6101"));
             contractId = contract.Id;
             (oldCost, oldChance, oldCredits, oldExperience, oldActive) =
                 (contract.CostNerve, contract.SuccessChance, contract.RewardCredits, contract.RewardExperience, contract.IsActive);
@@ -349,7 +349,7 @@ public sealed class HttpSecurityTests : IAsyncLifetime
 
         try
         {
-            using var response = await SendAsync(client, "/api/game/contract/execute", new { requestId = Guid.NewGuid() });
+            using var response = await SendAsync(client, "/api/game/contract/execute", new { requestId = Guid.NewGuid(), contractId });
             Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
             Assert.False(body.GetProperty("succeeded").GetBoolean());
@@ -385,7 +385,7 @@ public sealed class HttpSecurityTests : IAsyncLifetime
         Guid contractId;
         await using (var setup = TestDatabase.CreateDbContext())
         {
-            var contract = await setup.Contracts.SingleAsync();
+            var contract = await setup.Contracts.SingleAsync(value => value.Id == Guid.Parse("1c92d38c-6aca-4d33-9044-a4a92f6a6101"));
             contractId = contract.Id;
             contract.IsActive = false;
             await setup.SaveChangesAsync();
@@ -393,10 +393,12 @@ public sealed class HttpSecurityTests : IAsyncLifetime
 
         try
         {
-            using var unavailable = await client.GetAsync("/api/game/contract");
-            Assert.Equal(HttpStatusCode.NotFound, unavailable.StatusCode);
+            using var unavailable = await client.GetAsync("/api/game/contracts");
+            Assert.Equal(HttpStatusCode.OK, unavailable.StatusCode);
+            var catalog = await unavailable.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.DoesNotContain(catalog.EnumerateArray(), value => value.GetProperty("id").GetGuid() == contractId);
             using var execute = await SendAsync(
-                client, "/api/game/contract/execute", new { requestId = Guid.NewGuid() });
+                client, "/api/game/contract/execute", new { requestId = Guid.NewGuid(), contractId });
             Assert.Equal(HttpStatusCode.Conflict, execute.StatusCode);
             var body = await execute.Content.ReadFromJsonAsync<JsonElement>();
             Assert.False(body.GetProperty("succeeded").GetBoolean());
@@ -430,7 +432,7 @@ public sealed class HttpSecurityTests : IAsyncLifetime
         {
             await setup.Users.Where(value => value.Id == admin.Id)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(value => value.Role, "Admin"));
-            var contract = await setup.Contracts.AsNoTracking().SingleAsync();
+            var contract = await setup.Contracts.AsNoTracking().SingleAsync(value => value.Id == Guid.Parse("1c92d38c-6aca-4d33-9044-a4a92f6a6101"));
             contractId = contract.Id;
             originalCost = contract.CostNerve;
         }

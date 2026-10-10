@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
 import { getPendingAction } from "@/lib/pendingAction";
+import { GameNav } from "@/components/GameNav";
 
 type InventoryItem = {
   itemId: string;
@@ -91,6 +92,7 @@ export default function InventoryPage() {
   return (
     <main>
       <section className="game-panel shop-panel">
+        <GameNav />
         <Link className="back-link" href="/profile">← Профиль</Link>
         <p className="eyebrow game-eyebrow">Снаряжение</p>
         <h1 className="game-title">Инвентарь</h1>

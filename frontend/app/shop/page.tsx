@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
 import { getPendingAction } from "@/lib/pendingAction";
+import { GameNav } from "@/components/GameNav";
 
 type ShopItem = {
   id: string;
@@ -85,6 +86,7 @@ export default function ShopPage() {
   return (
     <main>
       <section className="game-panel shop-panel">
+        <GameNav />
         <Link className="back-link" href="/profile">← Профиль</Link>
         <p className="eyebrow game-eyebrow">Магазин NPC</p>
         <h1 className="game-title">Технолавка</h1>

@@ -15,9 +15,57 @@ namespace Millionnika.Api.Tests.Game;
 public sealed class ContractAvailabilityIntegrationTests
 {
     [Fact]
+    public async Task Catalog_ReturnsFourActiveContractsWithDescriptions()
+    {
+        await using var db = TestDatabase.CreateDbContext();
+        var contracts = await CreateService(db).GetContractsAsync(default);
+
+        Assert.Equal(4, contracts.Count);
+        Assert.Contains(contracts, value => value.Name == "Перехват рекламного дрона" && value.Description.Length > 0);
+        Assert.Contains(contracts, value => value.CostNerve == 1 && value.RewardCredits == 15 && value.RewardExperience == 4);
+        Assert.Contains(contracts, value => value.CostNerve == 3 && value.RewardCredits == 80 && value.RewardExperience == 15);
+        Assert.Contains(contracts, value => value.CostNerve == 4 && value.RewardCredits == 120 && value.RewardExperience == 20);
+    }
+
+    [Fact]
+    public async Task SelectedContract_IsUsedAndRequestIdIncludesItsId()
+    {
+        var player = await CreatePlayerAsync();
+        var contractId = Guid.Parse("1c92d38c-6aca-4d33-9044-a4a92f6a6102");
+        try
+        {
+            var requestId = Guid.NewGuid();
+            await using (var first = TestDatabase.CreateDbContext())
+            {
+                var result = await CreateService(first).ExecuteContractAsync(player.UserId, requestId, contractId, default);
+                Assert.True(result.Response.Succeeded);
+                Assert.Equal(15, result.Response.CreditsAwarded);
+                Assert.Equal(4, result.Response.ExperienceAwarded);
+            }
+            await using (var replayDb = TestDatabase.CreateDbContext())
+            {
+                var replay = await CreateService(replayDb).ExecuteContractAsync(player.UserId, requestId, contractId, default);
+                Assert.True(replay.Response.Replayed);
+            }
+            await using (var conflictDb = TestDatabase.CreateDbContext())
+            {
+                var conflict = await CreateService(conflictDb).ExecuteContractAsync(
+                    player.UserId, requestId, Guid.Parse("1c92d38c-6aca-4d33-9044-a4a92f6a6103"), default);
+                Assert.True(conflict.ResourceRejected);
+                Assert.Contains("других параметров", conflict.Response.Message);
+            }
+            await using var verify = TestDatabase.CreateDbContext();
+            var character = await verify.Characters.SingleAsync(value => value.Id == player.CharacterId);
+            Assert.Equal(115, character.Credits);
+            Assert.Equal(4, character.Experience);
+            Assert.Equal(9, character.Nerve);
+        }
+        finally { await DeletePlayerAsync(player.UserId); }
+    }
+    [Fact]
     public async Task NoActiveContract_GetReturnsNull()
     {
-        var original = await ConfigureContractAsync(isActive: false);
+        var original = await ConfigureAllContractsAsync(false);
         try
         {
             await using var db = TestDatabase.CreateDbContext();
@@ -25,7 +73,7 @@ public sealed class ContractAvailabilityIntegrationTests
         }
         finally
         {
-            await RestoreContractAsync(original);
+            await RestoreContractsAsync(original);
         }
     }
 
@@ -91,7 +139,7 @@ public sealed class ContractAvailabilityIntegrationTests
     public async Task Database_RejectsNonPositiveContractCost(int cost)
     {
         await using var db = TestDatabase.CreateDbContext();
-        var contract = await db.Contracts.AsNoTracking().SingleAsync();
+        var contract = await db.Contracts.AsNoTracking().SingleAsync(value => value.Id == Guid.Parse("1c92d38c-6aca-4d33-9044-a4a92f6a6101"));
         var exception = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync(
             $"UPDATE contracts SET \"CostNerve\" = {cost} WHERE \"Id\" = {contract.Id}"));
         Assert.Equal(PostgresErrorCodes.CheckViolation, exception.SqlState);
@@ -130,7 +178,7 @@ public sealed class ContractAvailabilityIntegrationTests
         long? rewardCredits = null, long? rewardExperience = null)
     {
         await using var db = TestDatabase.CreateDbContext();
-        var contract = await db.Contracts.SingleAsync();
+        var contract = await db.Contracts.SingleAsync(value => value.Id == Guid.Parse("1c92d38c-6aca-4d33-9044-a4a92f6a6101"));
         var original = new ContractValues(contract.Id, contract.CostNerve, contract.SuccessChance,
             contract.RewardCredits, contract.RewardExperience, contract.IsActive);
         contract.IsActive = isActive;
@@ -138,6 +186,18 @@ public sealed class ContractAvailabilityIntegrationTests
         if (chance.HasValue) contract.SuccessChance = chance.Value;
         if (rewardCredits.HasValue) contract.RewardCredits = rewardCredits.Value;
         if (rewardExperience.HasValue) contract.RewardExperience = rewardExperience.Value;
+        await db.SaveChangesAsync();
+        return original;
+    }
+
+    private static async Task<List<ContractValues>> ConfigureAllContractsAsync(bool isActive)
+    {
+        await using var db = TestDatabase.CreateDbContext();
+        var contracts = await db.Contracts.ToListAsync();
+        var original = contracts.Select(value => new ContractValues(
+            value.Id, value.CostNerve, value.SuccessChance, value.RewardCredits,
+            value.RewardExperience, value.IsActive)).ToList();
+        foreach (var contract in contracts) contract.IsActive = isActive;
         await db.SaveChangesAsync();
         return original;
     }
@@ -151,6 +211,11 @@ public sealed class ContractAvailabilityIntegrationTests
             .SetProperty(contract => contract.RewardCredits, value.RewardCredits)
             .SetProperty(contract => contract.RewardExperience, value.RewardExperience)
             .SetProperty(contract => contract.IsActive, value.IsActive));
+    }
+
+    private static async Task RestoreContractsAsync(IEnumerable<ContractValues> values)
+    {
+        foreach (var value in values) await RestoreContractAsync(value);
     }
 
     private static async Task DeletePlayerAsync(Guid userId)

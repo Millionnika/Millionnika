@@ -22,7 +22,7 @@ public sealed class NumericLimitsIntegrationTests
     {
         var player = await CreatePlayerAsync(credits: GameNumericLimits.MaxEconomyValue, experience: 20);
         await using var setup = TestDatabase.CreateDbContext();
-        var contract = await setup.Contracts.SingleAsync();
+            var contract = await setup.Contracts.SingleAsync(value => value.Id == Guid.Parse("1c92d38c-6aca-4d33-9044-a4a92f6a6101"));
         var original = new ContractValues(contract.CostNerve, contract.SuccessChance,
             contract.RewardCredits, contract.RewardExperience, contract.IsActive);
         contract.CostNerve = 2;

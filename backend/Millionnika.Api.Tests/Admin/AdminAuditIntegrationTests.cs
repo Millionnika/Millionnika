@@ -96,6 +96,36 @@ public sealed class AdminAuditIntegrationTests
         Assert.DoesNotContain("Email", serialized, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task AdminCanCreateContract_AndAuditContainsTexts()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var admin = CreateUser($"Admin{Guid.NewGuid():N}"[..20], "Admin", now);
+        await using (var setup = CreateDbContext()) { setup.Users.Add(admin); await setup.SaveChangesAsync(); }
+        try
+        {
+            await using var db = CreateDbContext();
+            var service = CreateService(db);
+            var result = await service.CreateContractAsync(admin.Id,
+                new CreateContractRequest("Тестовый контракт", "Юмор из тестовой базы.", 2, .5m, 10, 3, true, "Тест создания"), default);
+            Assert.True(result.Succeeded);
+            await using var verify = CreateDbContext();
+            var contract = await verify.Contracts.SingleAsync(value => value.Name == "Тестовый контракт");
+            var audit = await verify.AdminAuditLogs.SingleAsync(value => value.TargetId == contract.Id.ToString());
+            Assert.Equal("contract_create", audit.Action);
+            Assert.Contains("Юмор из тестовой базы", audit.NewValue);
+            Assert.DoesNotContain("Password", audit.NewValue, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            await using var cleanup = CreateDbContext();
+            var contractIds = await cleanup.Contracts.Where(value => value.Name == "Тестовый контракт").Select(value => value.Id).ToArrayAsync();
+            await cleanup.AdminAuditLogs.Where(value => value.AdminUserId == admin.Id || contractIds.Select(id => id.ToString()).Contains(value.TargetId)).ExecuteDeleteAsync();
+            await cleanup.Contracts.Where(value => contractIds.Contains(value.Id)).ExecuteDeleteAsync();
+            await cleanup.Users.Where(value => value.Id == admin.Id).ExecuteDeleteAsync();
+        }
+    }
+
     private static AdminService CreateService(GameDbContext db)
     {
         var options = Options.Create(new ResourceRecoveryOptions
