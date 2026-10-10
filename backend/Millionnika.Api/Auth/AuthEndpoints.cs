@@ -1,6 +1,5 @@
 using System.Security.Claims;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Antiforgery;
 
 namespace Millionnika.Api.Auth;
 
@@ -9,10 +8,15 @@ public static class AuthEndpoints
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var auth = endpoints.MapGroup("/api/auth");
+        auth.MapGet("/csrf", (HttpContext context, IAntiforgery antiforgery) =>
+        {
+            context.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(new { token = antiforgery.GetAndStoreTokens(context).RequestToken });
+        });
 
         auth.MapPost("/register", RegisterAsync);
         auth.MapPost("/login", LoginAsync);
-        auth.MapPost("/logout", (Func<HttpContext, Task<IResult>>)LogoutAsync).RequireAuthorization();
+        auth.MapPost("/logout", LogoutAsync).RequireAuthorization();
         auth.MapGet("/session", Session).RequireAuthorization();
 
         endpoints.MapGet("/api/profile", ProfileAsync).RequireAuthorization();
@@ -23,6 +27,7 @@ public static class AuthEndpoints
     private static async Task<IResult> RegisterAsync(
         RegisterRequest request,
         IAuthService authService,
+        SessionService sessions,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
@@ -38,13 +43,15 @@ public static class AuthEndpoints
             return Results.ValidationProblem(result.Errors, statusCode: StatusCodes.Status409Conflict);
         }
 
-        await SignInAsync(httpContext, result.User!);
+        if (!await sessions.SignInAsync(httpContext, result.User!.Id)) return Results.Unauthorized();
         return Results.Created("/api/profile", new AuthResponse(result.User!.Username, result.User.Role));
     }
 
     private static async Task<IResult> LoginAsync(
         LoginRequest request,
         IAuthService authService,
+        SessionService sessions,
+        AuthRequestLimiter limiter,
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
@@ -54,19 +61,21 @@ public static class AuthEndpoints
             return Results.ValidationProblem(errors);
         }
 
+        var retry = limiter.CheckLogin(request.Login!);
+        if (retry > 0) return AuthRequestLimiter.Rejected(httpContext, retry);
         var result = await authService.LoginAsync(request, cancellationToken);
         if (!result.Succeeded)
         {
             return Results.ValidationProblem(result.Errors, statusCode: StatusCodes.Status401Unauthorized);
         }
 
-        await SignInAsync(httpContext, result.User!);
+        if (!await sessions.SignInAsync(httpContext, result.User!.Id)) return Results.Unauthorized();
         return Results.Ok(new AuthResponse(result.User!.Username, result.User.Role));
     }
 
-    private static async Task<IResult> LogoutAsync(HttpContext httpContext)
+    private static async Task<IResult> LogoutAsync(HttpContext httpContext, SessionService sessions)
     {
-        await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        await sessions.SignOutAsync(httpContext);
         return Results.NoContent();
     }
 
@@ -92,23 +101,4 @@ public static class AuthEndpoints
         return profile is null ? Results.Unauthorized() : Results.Ok(profile);
     }
 
-    private static Task SignInAsync(HttpContext httpContext, Entities.User user)
-    {
-        var identity = new ClaimsIdentity(
-        [
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Name, user.Username),
-            new Claim(ClaimTypes.Role, user.Role)
-        ],
-        CookieAuthenticationDefaults.AuthenticationScheme);
-
-        return httpContext.SignInAsync(
-            CookieAuthenticationDefaults.AuthenticationScheme,
-            new ClaimsPrincipal(identity),
-            new AuthenticationProperties
-            {
-                IsPersistent = true,
-                AllowRefresh = true
-            });
-    }
 }

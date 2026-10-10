@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { API_URL, getErrorMessage } from "@/lib/api";
+import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
 
 type ListName = "friends" | "incoming" | "outgoing";
 type FriendItem = { relationId: string; playerId: string; username: string; level: number; createdAtUtc: string };

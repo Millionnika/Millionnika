@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { API_URL, getErrorMessage } from "@/lib/api";
+import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
 
 type Player = { id: string; username: string; email: string; role: string; isBlocked: boolean };
 type PlayerDetails = Player & {

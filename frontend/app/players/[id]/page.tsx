@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { API_URL, getErrorMessage } from "@/lib/api";
+import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
 
 type PublicProfile = {
   id: string; username: string; level: number; registeredAtUtc: string; description: string; canEdit: boolean;

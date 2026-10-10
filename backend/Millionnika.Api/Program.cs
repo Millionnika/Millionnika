@@ -32,6 +32,21 @@ builder.Services.AddDbContext<GameDbContext>(options =>
     options.UseNpgsql(connectionString);
 });
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<SessionService>();
+builder.Services.AddOptions<AuthProtectionOptions>().BindConfiguration("AuthProtection")
+    .Validate(options => options.LoginIpLimit > 0 && options.LoginNameLimit > 0 &&
+        options.RegistrationIpLimit > 0 && options.WindowSeconds > 0 && options.WindowSeconds <= 86400 &&
+        options.MaxBuckets > 0, "AuthProtection limits must be positive; window must be at most one day.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<AuthRequestLimiter>();
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = "X-CSRF-Token";
+    options.Cookie.Name = "millionnika_csrf";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+});
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddScoped<IGameActionService, GameActionService>();
 builder.Services.AddSingleton<IRandomSource, RandomSource>();
@@ -49,7 +64,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.SameSite = SameSiteMode.Lax;
         options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         options.ExpireTimeSpan = TimeSpan.FromDays(7);
-        options.SlidingExpiration = true;
+        options.SlidingExpiration = false;
         options.Events.OnRedirectToLogin = context =>
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -74,7 +89,11 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
                 .Where(user => user.Id == userId)
                 .Select(user => new { user.Username, user.Role, user.IsBlocked })
                 .SingleOrDefaultAsync(context.HttpContext.RequestAborted);
-            if (account is null || account.IsBlocked)
+            var now = context.HttpContext.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow();
+            var sessionValid = Guid.TryParse(context.Principal?.FindFirstValue(SessionService.SessionClaim), out var sessionId) &&
+                await db.UserSessions.AsNoTracking().AnyAsync(session => session.Id == sessionId &&
+                    session.UserId == userId && session.ExpiresAtUtc > now, context.HttpContext.RequestAborted);
+            if (account is null || account.IsBlocked || !sessionValid)
             {
                 context.RejectPrincipal();
                 await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -87,7 +106,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
                 [
                     new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
                     new Claim(ClaimTypes.Name, account.Username),
-                    new Claim(ClaimTypes.Role, account.Role)
+                    new Claim(ClaimTypes.Role, account.Role),
+                    new Claim(SessionService.SessionClaim, sessionId.ToString())
                 ], CookieAuthenticationDefaults.AuthenticationScheme);
                 context.ReplacePrincipal(new ClaimsPrincipal(identity));
                 context.ShouldRenew = true;
@@ -110,6 +130,7 @@ var app = builder.Build();
 
 app.UseCors();
 app.UseAuthentication();
+app.UseMiddleware<RequestSecurityMiddleware>();
 app.UseAuthorization();
 
 app.MapGet("/", () => Results.Ok(new

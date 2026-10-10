@@ -6,6 +6,7 @@ namespace Millionnika.Api.Data;
 public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbContext(options)
 {
     public DbSet<User> Users => Set<User>();
+    public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<GameCharacter> Characters => Set<GameCharacter>();
     public DbSet<Contract> Contracts => Set<Contract>();
     public DbSet<ActionLog> ActionLogs => Set<ActionLog>();
@@ -16,6 +17,14 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<UserSession>(entity =>
+        {
+            entity.ToTable("user_sessions");
+            entity.HasKey(session => session.Id);
+            entity.HasIndex(session => session.UserId);
+            entity.HasIndex(session => session.ExpiresAtUtc);
+            entity.HasOne<User>().WithMany().HasForeignKey(session => session.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
         modelBuilder.Entity<User>(entity =>
         {
             entity.ToTable("users");

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { API_URL } from "@/lib/api";
+import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
 
 type Resource = {
   current: number;
@@ -63,12 +63,15 @@ export default function ProfilePage() {
   }, [loadProfile]);
 
   async function logout() {
-    await fetch(`${API_URL}/api/auth/logout`, {
-      method: "POST",
-      credentials: "include",
-    });
-    router.replace("/login");
-    router.refresh();
+    try {
+      const response = await fetch(`${API_URL}/api/auth/logout`, { method: "POST", credentials: "include" });
+      if (!response.ok && response.status !== 401) {
+        setError(await getErrorMessage(response));
+        return;
+      }
+      router.replace("/login");
+      router.refresh();
+    } catch { setError("Не удалось завершить сессию. Повторите выход после восстановления связи."); }
   }
 
   if (error) {

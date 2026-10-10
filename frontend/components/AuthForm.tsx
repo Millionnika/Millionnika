@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { API_URL, getErrorMessage } from "@/lib/api";
+import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
 
 type AuthMode = "register" | "login";
 type AuthResponse = { username: string; role: string };

@@ -42,6 +42,8 @@ public sealed class AdminService(
 
         var oldValue = new { user.IsBlocked };
         user.IsBlocked = request.IsBlocked;
+        if (request.IsBlocked)
+            await dbContext.UserSessions.Where(session => session.UserId == playerId).ExecuteDeleteAsync(cancellationToken);
         AddAudit(adminId, "player_block", "user", playerId.ToString(), oldValue,
             new { user.IsBlocked }, request.Reason!);
         await dbContext.SaveChangesAsync(cancellationToken);
