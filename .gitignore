@@ -13,6 +13,18 @@ frontend/.env*
 .vs/
 
 # Local secrets and logs
+.verification/
+**/TestResults/
+**/artifacts/
+*.trx
+*.coverage
+*.coveragexml
+*.tsbuildinfo
+**/secrets.json
+appsettings.*.local.json
+*.pfx
+*.p12
+*.key
 appsettings.Local.json
 *.log
 .env
