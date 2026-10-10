@@ -91,6 +91,8 @@ public sealed class GameActionService(
             await transaction.CommitAsync(cancellationToken);
             return ToResult(existing, character, replayed: true);
         }
+        if (await dbContext.HuntingRequests.AsNoTracking().AnyAsync(value => value.UserId == userId && value.RequestId == requestId, cancellationToken))
+            return RequestConflict(requestId, character);
         resourceRecovery.Apply(character);
 
         var signature = ActionRequestSignature.Contract(contractId);
@@ -183,12 +185,19 @@ public sealed class GameActionService(
             await transaction.CommitAsync(cancellationToken);
             return ToResult(existing, character, replayed: true);
         }
+        if (await dbContext.HuntingRequests.AsNoTracking().AnyAsync(value => value.UserId == userId && value.RequestId == requestId, cancellationToken))
+            return RequestConflict(requestId, character);
         resourceRecovery.Apply(character);
 
         var options = trainingOptions.Value;
         ActionLog log;
 
-        if (!GameRules.HasEnoughResource(character.Energy, options.EnergyCost))
+        if (await dbContext.HuntFights.AnyAsync(value => value.CharacterId == character.Id && value.Status == "active", cancellationToken))
+        {
+            log = CreateLog(userId, requestId, TrainingAction, signature, false,
+                "Во время охоты тренировка недоступна.", errorCode: "active_hunt");
+        }
+        else if (!GameRules.HasEnoughResource(character.Energy, options.EnergyCost))
         {
             log = CreateLog(userId, requestId, TrainingAction, signature, false,
                 "Недостаточно энергии.", errorCode: "insufficient_energy", statName: stat.ToString());
@@ -295,7 +304,7 @@ public sealed class GameActionService(
                 character.Strength, character.Speed, character.Defense, character.Dexterity,
                 character.Experience, character.Level, character.HackingExperience, character.HackingLevel)),
         ResourceRejected: log.ErrorCode is "insufficient_nerve" or "insufficient_energy" or
-            "numeric_limit" or "contract_unavailable" or "contract_locked");
+            "numeric_limit" or "contract_unavailable" or "contract_locked" or "active_hunt");
 
     private static GameActionResult RequestConflict(Guid requestId, GameCharacter character) => new(
         new ActionResultResponse(

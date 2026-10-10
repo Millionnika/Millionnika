@@ -8,7 +8,8 @@ public static class ItemTypes
     public const string Consumable = "consumable";
     public const string Weapon = "weapon";
     public const string Armor = "armor";
-    public static bool IsValid(string? value) => value is Consumable or Weapon or Armor;
+    public const string Ammunition = "ammunition";
+    public static bool IsValid(string? value) => value is Consumable or Weapon or Armor or Ammunition;
 }
 
 public static class EquipmentSlots
@@ -43,17 +44,20 @@ public static class EquipmentRules
     public static bool IsDefinitionValid(Item item) => item.Type switch
     {
         ItemTypes.Consumable => item.AllowedSlots == string.Empty && item.EffectResource is "energy" or "nerve" or "health" &&
-            item.EffectAmount > 0 && RatingsAreZero(item) && item.ArmorCoverage == "{}",
+            item.EffectAmount > 0 && RatingsAreZero(item) && item.ArmorCoverage == "{}" && NoAmmo(item),
+        ItemTypes.Ammunition => item.AllowedSlots == string.Empty && item.EffectAmount == 0 &&
+            item.EffectResource == string.Empty && RatingsAreZero(item) && item.ArmorCoverage == "{}" &&
+            !string.IsNullOrWhiteSpace(item.Caliber) && item.ClipSize == 0 && item.RateOfFireMin == 0 && item.RateOfFireMax == 0,
         ItemTypes.Weapon => ValidSlots(item.AllowedSlots, EquipmentSlots.WeaponPermanent) &&
             ValidRange(item.MinimumDamage, item.MaximumDamage, MaximumWeaponRating, requirePositive: true) &&
             ValidRange(item.MinimumAccuracy, item.MaximumAccuracy, MaximumAccuracy, requirePositive: false) &&
             item.MinimumArmor == 0 && item.MaximumArmor == 0 && item.EffectAmount == 0 &&
-            item.EffectResource == string.Empty && item.ArmorCoverage == "{}",
+            item.EffectResource == string.Empty && item.ArmorCoverage == "{}" && ValidWeaponAmmo(item),
         ItemTypes.Armor => ValidSlots(item.AllowedSlots, EquipmentSlots.Armor, exactlyOne: true) &&
             ValidRange(item.MinimumArmor, item.MaximumArmor, MaximumArmor, requirePositive: true) &&
             item.MinimumDamage == 0 && item.MaximumDamage == 0 && item.MinimumAccuracy == 0 &&
             item.MaximumAccuracy == 0 && item.EffectAmount == 0 && item.EffectResource == string.Empty &&
-            IsCoverageValid(item.ArmorCoverage),
+            IsCoverageValid(item.ArmorCoverage) && NoAmmo(item),
         _ => false
     };
 
@@ -78,6 +82,14 @@ public static class EquipmentRules
     }
     private static bool RatingsAreZero(Item item) => item.MinimumDamage == 0 && item.MaximumDamage == 0 &&
         item.MinimumAccuracy == 0 && item.MaximumAccuracy == 0 && item.MinimumArmor == 0 && item.MaximumArmor == 0;
+    private static bool NoAmmo(Item item) => item.Caliber == string.Empty && item.ClipSize == 0 && item.RateOfFireMin == 0 && item.RateOfFireMax == 0;
+    private static bool ValidWeaponAmmo(Item item)
+    {
+        var firearm = EquipmentSlots.Parse(item.AllowedSlots).Any(slot => slot is EquipmentSlots.Primary or EquipmentSlots.Secondary);
+        return firearm
+            ? !string.IsNullOrWhiteSpace(item.Caliber) && item.ClipSize > 0 && item.RateOfFireMin > 0 && item.RateOfFireMin <= item.RateOfFireMax && item.RateOfFireMax <= item.ClipSize
+            : NoAmmo(item);
+    }
 }
 
 public interface IEquipmentRoller { decimal Roll(decimal minimum, decimal maximum); }

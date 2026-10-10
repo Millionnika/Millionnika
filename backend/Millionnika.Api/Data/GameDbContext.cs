@@ -16,6 +16,10 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
     public DbSet<EquipmentInstance> EquipmentInstances => Set<EquipmentInstance>();
     public DbSet<AdminAuditLog> AdminAuditLogs => Set<AdminAuditLog>();
     public DbSet<FriendRelation> FriendRelations => Set<FriendRelation>();
+    public DbSet<HuntingLocation> HuntingLocations => Set<HuntingLocation>();
+    public DbSet<HuntingTarget> HuntingTargets => Set<HuntingTarget>();
+    public DbSet<HuntFight> HuntFights => Set<HuntFight>();
+    public DbSet<HuntingRequest> HuntingRequests => Set<HuntingRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -52,7 +56,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
             {
                 table.HasCheckConstraint("CK_characters_Credits", $"\"Credits\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
                 table.HasCheckConstraint("CK_characters_Experience", $"\"Experience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
-                table.HasCheckConstraint("CK_characters_Progression", $"\"Level\" BETWEEN 1 AND 20 AND \"HackingLevel\" BETWEEN 1 AND 20 AND \"HackingExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
+                table.HasCheckConstraint("CK_characters_Progression", $"\"Level\" BETWEEN 1 AND 20 AND \"HackingLevel\" BETWEEN 1 AND 20 AND \"HackingExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"HuntingLevel\" BETWEEN 1 AND 20 AND \"HuntingExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
                 table.HasCheckConstraint("CK_characters_Stats", $"\"Strength\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue} AND \"Speed\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue} AND \"Defense\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue} AND \"Dexterity\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue}");
             });
             entity.HasKey(character => character.Id);
@@ -77,7 +81,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
         {
             entity.ToTable("action_logs", table =>
             {
-                table.HasCheckConstraint("CK_action_logs_Economy", $"\"CreditsAwarded\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"ExperienceAwarded\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"HackingExperienceAwarded\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"CreditsSpent\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
+                table.HasCheckConstraint("CK_action_logs_Economy", $"\"CreditsAwarded\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"ExperienceAwarded\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"HackingExperienceAwarded\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"HuntingExperienceAwarded\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"CreditsSpent\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
                 table.HasCheckConstraint("CK_action_logs_StatGain", $"\"StatGain\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue}");
                 table.HasCheckConstraint("CK_action_logs_RequestSignature", "\"RequestSignature\" <> ''");
             });
@@ -99,8 +103,9 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
             entity.ToTable("items", table =>
             {
                 table.HasCheckConstraint("CK_items_Price", $"\"Price\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
-                table.HasCheckConstraint("CK_items_EffectAmount", "(\"Type\" = 'consumable' AND \"EffectAmount\" > 0) OR (\"Type\" IN ('weapon','armor') AND \"EffectAmount\" = 0)");
+                table.HasCheckConstraint("CK_items_EffectAmount", "(\"Type\" = 'consumable' AND \"EffectAmount\" > 0) OR (\"Type\" IN ('weapon','armor','ammunition') AND \"EffectAmount\" = 0)");
                 table.HasCheckConstraint("CK_items_EquipmentRatings", "\"MinimumDamage\" BETWEEN 0 AND 1000 AND \"MaximumDamage\" BETWEEN \"MinimumDamage\" AND 1000 AND \"MinimumAccuracy\" BETWEEN 0 AND 100 AND \"MaximumAccuracy\" BETWEEN \"MinimumAccuracy\" AND 100 AND \"MinimumArmor\" BETWEEN 0 AND 100 AND \"MaximumArmor\" BETWEEN \"MinimumArmor\" AND 100");
+                table.HasCheckConstraint("CK_items_Ammo", "\"ClipSize\" BETWEEN 0 AND 1000 AND \"RateOfFireMin\" BETWEEN 0 AND 1000 AND \"RateOfFireMax\" BETWEEN \"RateOfFireMin\" AND 1000");
             });
             entity.HasKey(item => item.Id);
             entity.Property(item => item.Name).HasMaxLength(120).IsRequired();
@@ -115,6 +120,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
             entity.Property(item => item.MinimumArmor).HasPrecision(5, 2);
             entity.Property(item => item.MaximumArmor).HasPrecision(5, 2);
             entity.Property(item => item.ArmorCoverage).HasColumnType("jsonb").IsRequired();
+            entity.Property(item => item.Caliber).HasMaxLength(40).IsRequired();
             entity.HasData(
                 new Item
                 {
@@ -225,6 +231,58 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
                 .OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<User>().WithMany().HasForeignKey(relation => relation.RecipientId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<HuntingLocation>(entity =>
+        {
+            entity.ToTable("hunting_locations", table => table.HasCheckConstraint("CK_hunting_locations_Level", "\"MinimumHuntingLevel\" BETWEEN 1 AND 20"));
+            entity.HasKey(value => value.Id);
+            entity.Property(value => value.Name).HasMaxLength(120).IsRequired();
+            entity.Property(value => value.Description).HasMaxLength(500).IsRequired();
+        });
+        modelBuilder.Entity<HuntingTarget>(entity =>
+        {
+            entity.ToTable("hunting_targets", table =>
+            {
+                table.HasCheckConstraint("CK_hunting_targets_Level", "\"MinimumHuntingLevel\" BETWEEN 1 AND 20");
+                table.HasCheckConstraint("CK_hunting_targets_Values", $"\"EnergyCost\" > 0 AND \"Health\" > 0 AND \"Strength\" > 0 AND \"Speed\" > 0 AND \"Defense\" > 0 AND \"Dexterity\" > 0 AND \"RewardCredits\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"RewardExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"RewardHuntingExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
+                table.HasCheckConstraint("CK_hunting_targets_Weapon", "\"WeaponDamage\" BETWEEN 1 AND 1000 AND \"WeaponAccuracy\" BETWEEN 0 AND 100 AND \"ClipSize\" BETWEEN 0 AND 1000 AND \"RateOfFireMin\" BETWEEN 0 AND 1000 AND \"RateOfFireMax\" BETWEEN \"RateOfFireMin\" AND 1000 AND \"SpareClips\" BETWEEN 0 AND 3");
+            });
+            entity.HasKey(value => value.Id);
+            entity.Property(value => value.Name).HasMaxLength(120).IsRequired();
+            entity.Property(value => value.Description).HasMaxLength(500).IsRequired();
+            entity.Property(value => value.WeaponName).HasMaxLength(120).IsRequired();
+            entity.Property(value => value.WeaponDamage).HasPrecision(7, 2);
+            entity.Property(value => value.WeaponAccuracy).HasPrecision(5, 2);
+            entity.Property(value => value.Armor).HasPrecision(5, 2);
+            entity.Property(value => value.ArmorCoverage).HasColumnType("jsonb").IsRequired();
+            entity.HasOne(value => value.Location).WithMany(value => value.Targets).HasForeignKey(value => value.LocationId).OnDelete(DeleteBehavior.Restrict);
+        });
+        modelBuilder.Entity<HuntFight>(entity =>
+        {
+            entity.ToTable("hunt_fights", table =>
+            {
+                table.HasCheckConstraint("CK_hunt_fights_Status", "\"Status\" IN ('active','won','lost','stalemate','timeout')");
+                table.HasCheckConstraint("CK_hunt_fights_Values", "\"Turn\" BETWEEN 0 AND 25 AND \"PlayerHealth\" >= 0 AND \"RobotHealth\" >= 0");
+            });
+            entity.HasKey(value => value.Id);
+            entity.Property(value => value.Status).HasMaxLength(16).IsRequired();
+            entity.Property(value => value.SnapshotJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(value => value.StateJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(value => value.LogJson).HasColumnType("jsonb").IsRequired();
+            entity.HasIndex(value => value.CharacterId).IsUnique().HasFilter("\"Status\" = 'active'");
+            entity.HasOne(value => value.Character).WithMany(value => value.HuntFights).HasForeignKey(value => value.CharacterId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<HuntingTarget>().WithMany().HasForeignKey(value => value.TargetId).OnDelete(DeleteBehavior.Restrict);
+        });
+        modelBuilder.Entity<HuntingRequest>(entity =>
+        {
+            entity.ToTable("hunting_requests");
+            entity.HasKey(value => value.Id);
+            entity.Property(value => value.ActionType).HasMaxLength(24).IsRequired();
+            entity.Property(value => value.Signature).HasMaxLength(160).IsRequired();
+            entity.Property(value => value.ResponseJson).HasColumnType("jsonb").IsRequired();
+            entity.HasIndex(value => new { value.UserId, value.RequestId }).IsUnique();
+            entity.HasOne<User>().WithMany().HasForeignKey(value => value.UserId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

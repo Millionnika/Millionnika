@@ -73,7 +73,9 @@ public sealed class AuthService(
             Dexterity = defaults.Dexterity,
             Experience = defaults.Experience,
             HackingLevel = 1,
-            HackingExperience = 0
+            HackingExperience = 0,
+            HuntingLevel = 1,
+            HuntingExperience = 0
         };
 
         dbContext.Users.Add(user);
@@ -151,7 +153,8 @@ public sealed class AuthService(
             .OrderBy(instance => instance.EquippedSlot)
             .Select(instance => new EquippedItemResponse(
                 instance.Id, instance.EquippedSlot!, instance.Item.Name, instance.Item.Type,
-                instance.Damage, instance.Accuracy, instance.Armor, instance.Item.ArmorCoverage))
+                instance.Damage, instance.Accuracy, instance.Armor, instance.Item.ArmorCoverage,
+                instance.Item.Caliber, instance.Item.ClipSize, instance.Item.RateOfFireMin, instance.Item.RateOfFireMax))
             .ToListAsync(cancellationToken);
 
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -172,6 +175,7 @@ public sealed class AuthService(
             character.Experience,
             progression.GetGeneral(character.Experience),
             progression.GetHacking(character.HackingExperience),
+            progression.GetHunting(character.HuntingExperience),
             equipment);
     }
 

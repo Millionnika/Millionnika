@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Millionnika.Api.Data;
 using Millionnika.Api.Entities;
 using Millionnika.Api.Resources;
+using Millionnika.Api.Game;
+using Millionnika.Api.Inventory;
 
 namespace Millionnika.Api.Admin;
 
@@ -159,7 +161,8 @@ public sealed class AdminService(
                 item.Id, item.Name, item.Description, item.Price, item.Type,
                 item.EffectResource, item.EffectAmount, item.IsActive, item.AllowedSlots,
                 item.MinimumDamage, item.MaximumDamage, item.MinimumAccuracy, item.MaximumAccuracy,
-                item.MinimumArmor, item.MaximumArmor, item.ArmorCoverage))
+                item.MinimumArmor, item.MaximumArmor, item.ArmorCoverage,
+                item.Caliber, item.ClipSize, item.RateOfFireMin, item.RateOfFireMax))
             .ToListAsync(cancellationToken);
 
     public async Task<AdminMutationResult> CreateItemAsync(
@@ -175,6 +178,8 @@ public sealed class AdminService(
             MinimumAccuracy = request.MinimumAccuracy, MaximumAccuracy = request.MaximumAccuracy,
             MinimumArmor = request.MinimumArmor, MaximumArmor = request.MaximumArmor,
             ArmorCoverage = request.ArmorCoverage ?? "{}", IsActive = request.IsActive
+            ,Caliber = request.Caliber?.Trim() ?? string.Empty, ClipSize = request.ClipSize,
+            RateOfFireMin = request.RateOfFireMin, RateOfFireMax = request.RateOfFireMax
         };
         if (!AdminRules.IsItemValid(item, request.Reason))
             return InvalidItem();
@@ -218,6 +223,56 @@ public sealed class AdminService(
                 log.OldValue, log.NewValue, log.Reason, log.CreatedAtUtc))
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<AdminHuntingLocationResponse>> GetHuntingLocationsAsync(CancellationToken token) =>
+        await dbContext.HuntingLocations.AsNoTracking().OrderBy(value => value.MinimumHuntingLevel).ThenBy(value => value.Name)
+            .Select(value => new AdminHuntingLocationResponse(value.Id, value.Name, value.Description, value.MinimumHuntingLevel, value.IsActive)).ToListAsync(token);
+
+    public async Task<AdminMutationResult> UpdateHuntingLocationAsync(Guid adminId, Guid id, UpdateHuntingLocationRequest request, CancellationToken token)
+    {
+        if (!AdminRules.IsReasonValid(request.Reason) || string.IsNullOrWhiteSpace(request.Name) || request.Name.Trim().Length > 120 ||
+            string.IsNullOrWhiteSpace(request.Description) || request.Description.Trim().Length > 500 || request.MinimumHuntingLevel is < 1 or > 20)
+            return AdminMutationResult.Failure("Проверьте название, описание, уровень и причину.");
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(token);
+        var value = await dbContext.HuntingLocations.FromSqlInterpolated($"SELECT * FROM hunting_locations WHERE \"Id\"={id} FOR UPDATE").SingleOrDefaultAsync(token);
+        if (value is null) return AdminMutationResult.Failure("Локация не найдена.");
+        var old = new { value.Name, value.Description, value.MinimumHuntingLevel, value.IsActive };
+        value.Name = request.Name.Trim(); value.Description = request.Description.Trim(); value.MinimumHuntingLevel = request.MinimumHuntingLevel; value.IsActive = request.IsActive;
+        AddAudit(adminId, "hunting_location_update", "hunting_location", id.ToString(), old,
+            new { value.Name, value.Description, value.MinimumHuntingLevel, value.IsActive }, request.Reason!);
+        await dbContext.SaveChangesAsync(token); await transaction.CommitAsync(token);
+        return AdminMutationResult.Success("Локация обновлена.");
+    }
+
+    public async Task<IReadOnlyList<AdminHuntingTargetResponse>> GetHuntingTargetsAsync(CancellationToken token) =>
+        await dbContext.HuntingTargets.AsNoTracking().OrderBy(value => value.MinimumHuntingLevel).ThenBy(value => value.Name)
+            .Select(value => new AdminHuntingTargetResponse(value.Id, value.LocationId, value.Name, value.Description,
+                value.MinimumHuntingLevel, value.EnergyCost, value.Health, value.Strength, value.Speed, value.Defense, value.Dexterity,
+                value.WeaponName, value.WeaponDamage, value.WeaponAccuracy, value.ClipSize, value.RateOfFireMin,
+                value.RateOfFireMax, value.SpareClips, value.Armor, value.ArmorCoverage, value.RewardCredits,
+                value.RewardExperience, value.RewardHuntingExperience, value.IsActive)).ToListAsync(token);
+
+    public async Task<AdminMutationResult> UpdateHuntingTargetAsync(Guid adminId, Guid id, UpdateHuntingTargetRequest request, CancellationToken token)
+    {
+        if (!IsHuntingTargetValid(request) || !AdminRules.IsReasonValid(request.Reason))
+            return AdminMutationResult.Failure("Проверьте характеристики робота, награды, покрытие и причину.");
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(token);
+        if (!await dbContext.HuntingLocations.AnyAsync(value => value.Id == request.LocationId, token))
+            return AdminMutationResult.Failure("Локация не найдена.");
+        var value = await dbContext.HuntingTargets.FromSqlInterpolated($"SELECT * FROM hunting_targets WHERE \"Id\"={id} FOR UPDATE").SingleOrDefaultAsync(token);
+        if (value is null) return AdminMutationResult.Failure("Робот не найден.");
+        var old = HuntingTargetValues(value);
+        value.LocationId = request.LocationId; value.Name = request.Name!.Trim(); value.Description = request.Description!.Trim();
+        value.MinimumHuntingLevel = request.MinimumHuntingLevel; value.EnergyCost = request.EnergyCost; value.Health = request.Health;
+        value.Strength = request.Strength; value.Speed = request.Speed; value.Defense = request.Defense; value.Dexterity = request.Dexterity;
+        value.WeaponName = request.WeaponName!.Trim(); value.WeaponDamage = request.WeaponDamage; value.WeaponAccuracy = request.WeaponAccuracy;
+        value.ClipSize = request.ClipSize; value.RateOfFireMin = request.RateOfFireMin; value.RateOfFireMax = request.RateOfFireMax; value.SpareClips = request.SpareClips;
+        value.Armor = request.Armor; value.ArmorCoverage = request.ArmorCoverage!; value.RewardCredits = request.RewardCredits;
+        value.RewardExperience = request.RewardExperience; value.RewardHuntingExperience = request.RewardHuntingExperience; value.IsActive = request.IsActive;
+        AddAudit(adminId, "hunting_target_update", "hunting_target", id.ToString(), old, HuntingTargetValues(value), request.Reason!);
+        await dbContext.SaveChangesAsync(token); await transaction.CommitAsync(token);
+        return AdminMutationResult.Success("Робот обновлён.");
+    }
+
     private void AddAudit(Guid adminId, string action, string targetType, string targetId,
         object oldValue, object newValue, string reason) =>
         dbContext.AdminAuditLogs.Add(new AdminAuditLog
@@ -250,7 +305,8 @@ public sealed class AdminService(
     {
         item.Name, item.Price, item.Description, item.Type, item.EffectResource, item.EffectAmount,
         item.AllowedSlots, item.MinimumDamage, item.MaximumDamage, item.MinimumAccuracy,
-        item.MaximumAccuracy, item.MinimumArmor, item.MaximumArmor, item.ArmorCoverage, item.IsActive
+        item.MaximumAccuracy, item.MinimumArmor, item.MaximumArmor, item.ArmorCoverage,
+        item.Caliber, item.ClipSize, item.RateOfFireMin, item.RateOfFireMax, item.IsActive
     };
 
     private static AdminMutationResult InvalidItem() => AdminMutationResult.Failure(
@@ -258,4 +314,26 @@ public sealed class AdminService(
 
     private static AdminMutationResult InvalidReason() =>
         AdminMutationResult.Failure("Укажите причину длиной от 3 до 500 символов.");
+
+    private static bool IsHuntingTargetValid(UpdateHuntingTargetRequest value) =>
+        value.LocationId != Guid.Empty && !string.IsNullOrWhiteSpace(value.Name) && value.Name.Trim().Length <= 120 &&
+        !string.IsNullOrWhiteSpace(value.Description) && value.Description.Trim().Length <= 500 &&
+        !string.IsNullOrWhiteSpace(value.WeaponName) && value.WeaponName.Trim().Length <= 120 &&
+        value.MinimumHuntingLevel is >= 1 and <= 20 && value.EnergyCost > 0 && value.Health > 0 &&
+        value.Strength > 0 && value.Speed > 0 && value.Defense > 0 && value.Dexterity > 0 &&
+        value.WeaponDamage is >= 1 and <= 1000 && value.WeaponAccuracy is >= 0 and <= 100 &&
+        value.ClipSize is >= 0 and <= 1000 && value.RateOfFireMin >= 0 && value.RateOfFireMax >= value.RateOfFireMin &&
+        value.RateOfFireMax <= Math.Max(value.ClipSize, 0) && value.SpareClips is >= 0 and <= 3 &&
+        value.Armor is >= 0 and <= 100 && (value.Armor == 0 ? value.ArmorCoverage == "{}" : EquipmentRules.IsCoverageValid(value.ArmorCoverage)) &&
+        value.RewardCredits is >= 0 and <= GameNumericLimits.MaxEconomyValue &&
+        value.RewardExperience is >= 0 and <= GameNumericLimits.MaxEconomyValue &&
+        value.RewardHuntingExperience is >= 0 and <= GameNumericLimits.MaxEconomyValue;
+
+    private static object HuntingTargetValues(HuntingTarget value) => new
+    {
+        value.LocationId, value.Name, value.Description, value.MinimumHuntingLevel, value.EnergyCost, value.Health,
+        value.Strength, value.Speed, value.Defense, value.Dexterity, value.WeaponName, value.WeaponDamage,
+        value.WeaponAccuracy, value.ClipSize, value.RateOfFireMin, value.RateOfFireMax, value.SpareClips,
+        value.Armor, value.ArmorCoverage, value.RewardCredits, value.RewardExperience, value.RewardHuntingExperience, value.IsActive
+    };
 }

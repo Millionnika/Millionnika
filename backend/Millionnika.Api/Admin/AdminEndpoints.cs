@@ -21,6 +21,12 @@ public static class AdminEndpoints
         admin.MapPut("/items/{itemId:guid}", UpdateItemAsync);
         admin.MapGet("/action-logs", GetActionLogsAsync);
         admin.MapGet("/audit-logs", GetAuditLogsAsync);
+        admin.MapGet("/hunting/locations", async (IAdminService service, CancellationToken token) => Results.Ok(await service.GetHuntingLocationsAsync(token)));
+        admin.MapPut("/hunting/locations/{id:guid}", async (Guid id, UpdateHuntingLocationRequest request, ClaimsPrincipal principal, IAdminService service, CancellationToken token) =>
+            ToResult(await service.UpdateHuntingLocationAsync(GetUserId(principal), id, request, token)));
+        admin.MapGet("/hunting/targets", async (IAdminService service, CancellationToken token) => Results.Ok(await service.GetHuntingTargetsAsync(token)));
+        admin.MapPut("/hunting/targets/{id:guid}", async (Guid id, UpdateHuntingTargetRequest request, ClaimsPrincipal principal, IAdminService service, CancellationToken token) =>
+            ToResult(await service.UpdateHuntingTargetAsync(GetUserId(principal), id, request, token)));
         return endpoints;
     }
 

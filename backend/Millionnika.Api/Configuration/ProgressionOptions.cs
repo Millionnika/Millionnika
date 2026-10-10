@@ -7,6 +7,7 @@ public sealed class ProgressionOptions
     public int MaximumLevel { get; init; }
     public long[] GeneralLevelThresholds { get; init; } = [];
     public long[] HackingLevelThresholds { get; init; } = [];
+    public long[] HuntingLevelThresholds { get; init; } = [];
     public decimal HackingChanceBonusPerLevel { get; init; }
     public decimal MaximumHackingChanceBonus { get; init; }
     public decimal MaximumHackingSuccessChance { get; init; }

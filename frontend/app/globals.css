@@ -789,11 +789,18 @@ a {
 .progress-card { display: grid; gap: 8px; margin: 18px 0; padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: rgba(7, 11, 25, 0.52); }
 .progress-card span { color: var(--muted); }
 .progress-card progress { width: 100%; accent-color: var(--cyan); }
+.hunting-locations { display: grid; gap: 28px; }
+.hunting-location { padding-top: 12px; }
+.hunting-location > p { color: var(--muted); }
+.fight-panel, .fight-weapons { display: grid; gap: 16px; }
+.fight-health { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 18px; border: 1px solid var(--border); border-radius: 14px; }
+.fight-weapons { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 @media (max-width: 650px) {
   .contract-grid { grid-template-columns: 1fr; }
   .progress-grid { grid-template-columns: 1fr; }
   .game-nav { gap: 6px 12px; }
+  .fight-weapons { grid-template-columns: 1fr; }
 }
 
 .status-card {

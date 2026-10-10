@@ -10,6 +10,7 @@ public static class TestProgression
         MaximumLevel = 20,
         GeneralLevelThresholds = Enumerable.Range(1, 20).Select(level => 100L * level * (level - 1) / 2).ToArray(),
         HackingLevelThresholds = Enumerable.Range(1, 20).Select(level => 50L * level * (level - 1) / 2).ToArray(),
+        HuntingLevelThresholds = Enumerable.Range(1, 20).Select(level => 50L * level * (level - 1) / 2).ToArray(),
         HackingChanceBonusPerLevel = 0.01m,
         MaximumHackingChanceBonus = 0.10m,
         MaximumHackingSuccessChance = 0.95m

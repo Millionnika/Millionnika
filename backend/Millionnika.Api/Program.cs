@@ -15,6 +15,7 @@ using System.Security.Claims;
 using Millionnika.Api.Resources;
 using Millionnika.Api.Friends;
 using Millionnika.Api.Security;
+using Millionnika.Api.Hunting;
 using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -34,6 +35,10 @@ builder.Services.AddOptions<ProgressionOptions>()
     .BindConfiguration(ProgressionOptions.SectionName)
     .Validate(ProgressionService.IsValid,
         "Progression thresholds and hacking chance settings are invalid.")
+    .ValidateOnStart();
+builder.Services.AddOptions<HuntingOptions>()
+    .BindConfiguration(HuntingOptions.SectionName)
+    .Validate(CombatCalculator.IsValid, "Hunting combat configuration is invalid.")
     .ValidateOnStart();
 builder.Services.Configure<ResourceRecoveryOptions>(
     builder.Configuration.GetSection(ResourceRecoveryOptions.SectionName));
@@ -63,6 +68,8 @@ builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddScoped<IGameActionService, GameActionService>();
 builder.Services.AddSingleton<IProgressionService, ProgressionService>();
 builder.Services.AddSingleton<IRandomSource, RandomSource>();
+builder.Services.AddSingleton<ICombatCalculator, CombatCalculator>();
+builder.Services.AddScoped<IHuntingService, HuntingService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IResourceRecoveryService, ResourceRecoveryService>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
@@ -173,6 +180,7 @@ app.MapInventoryEndpoints();
 app.MapAdminEndpoints();
 app.MapPlayerDirectoryEndpoints();
 app.MapFriendEndpoints();
+app.MapHuntingEndpoints();
 
 try
 {

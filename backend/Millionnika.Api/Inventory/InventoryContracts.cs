@@ -20,7 +20,8 @@ public sealed record ShopItemResponse(
     decimal MaximumAccuracy,
     decimal MinimumArmor,
     decimal MaximumArmor,
-    string ArmorCoverage);
+    string ArmorCoverage,
+    string Caliber, int ClipSize, int RateOfFireMin, int RateOfFireMax);
 
 public sealed record InventoryItemResponse(
     Guid ItemId,
@@ -36,7 +37,8 @@ public sealed record InventoryItemResponse(
     decimal Armor,
     string? EquippedSlot,
     string AllowedSlots,
-    string ArmorCoverage);
+    string ArmorCoverage,
+    string Caliber, int ClipSize, int RateOfFireMin, int RateOfFireMax);
 
 public sealed record InventoryResourcesResponse(
     int Energy,

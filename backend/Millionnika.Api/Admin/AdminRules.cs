@@ -70,6 +70,10 @@ public static class AdminRules
         item.MinimumAccuracy = request.MinimumAccuracy; item.MaximumAccuracy = request.MaximumAccuracy;
         item.MinimumArmor = request.MinimumArmor; item.MaximumArmor = request.MaximumArmor;
         item.ArmorCoverage = request.ArmorCoverage ?? "{}";
+        item.Caliber = request.Caliber?.Trim() ?? string.Empty;
+        item.ClipSize = request.ClipSize;
+        item.RateOfFireMin = request.RateOfFireMin;
+        item.RateOfFireMax = request.RateOfFireMax;
         item.IsActive = request.IsActive;
     }
 

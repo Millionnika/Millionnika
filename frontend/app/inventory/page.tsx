@@ -11,6 +11,7 @@ type InventoryItem = {
   itemId: string; instanceId: string | null; name: string; description: string; type: string;
   effectResource: string; effectAmount: number; quantity: number; damage: number; accuracy: number;
   armor: number; equippedSlot: string | null; allowedSlots: string; armorCoverage: string;
+  caliber: string; clipSize: number; rateOfFireMin: number; rateOfFireMax: number;
 };
 type Resource = { current: number; maximum: number };
 type Profile = { energy: Resource; nerve: Resource; health: Resource };
@@ -80,7 +81,7 @@ export default function InventoryPage() {
           const slots = item.allowedSlots.split(",").filter(Boolean);
           return <article className="item-card" key={key}>
             <div><h2>{item.name}</h2><p>{item.description}</p></div>
-            {item.type === "consumable" ? <>
+            {item.type === "ammunition" ? <><strong>В наличии: {item.quantity}</strong><p className="field-hint">Калибр: {item.caliber}</p></> : item.type === "consumable" ? <>
               <strong>В наличии: {item.quantity}</strong>
               <label>Использовать<input type="number" min="1" max={Math.min(100, item.quantity)} value={quantities[item.itemId] ?? 1} onChange={(event) => setQuantities((current) => ({ ...current, [item.itemId]: Number(event.target.value) }))} /></label>
               <button className="primary-button" type="button" onClick={() => void useItem(item)} disabled={busyKey !== null}>{busyKey === item.itemId ? "Использование…" : "Использовать"}</button>

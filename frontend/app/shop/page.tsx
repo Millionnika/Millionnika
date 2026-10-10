@@ -23,6 +23,7 @@ type ShopItem = {
   minimumArmor: number;
   maximumArmor: number;
   armorCoverage: string;
+  caliber: string; clipSize: number; rateOfFireMin: number; rateOfFireMax: number;
 };
 
 type Profile = { credits: number };
@@ -110,6 +111,8 @@ export default function ShopPage() {
                 <h2>{item.name}</h2>
                 <p>{item.description}</p>
                 {item.type === "weapon" && <p className="field-hint">Урон {formatRange(item.minimumDamage, item.maximumDamage)} · Точность {formatRange(item.minimumAccuracy, item.maximumAccuracy)}</p>}
+                {item.type === "weapon" && item.clipSize > 0 && <p className="field-hint">Калибр {item.caliber} · магазин {item.clipSize} · выстрелов за ход {item.rateOfFireMin}–{item.rateOfFireMax}</p>}
+                {item.type === "ammunition" && <p className="field-hint">Боеприпас · калибр {item.caliber}</p>}
                 {item.type === "armor" && <p className="field-hint">Броня {formatRange(item.minimumArmor, item.maximumArmor)} · Слот: {slotName(item.allowedSlots)} · Покрытие: {formatCoverage(item.armorCoverage)}</p>}
               </div>
               <strong>{item.price} кредитов</strong>

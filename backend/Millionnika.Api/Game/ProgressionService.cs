@@ -8,6 +8,7 @@ public interface IProgressionService
 {
     ProgressionState GetGeneral(long experience);
     ProgressionState GetHacking(long experience);
+    ProgressionState GetHunting(long experience);
     LevelChange Apply(GameCharacter character);
     decimal GetContractChance(Contract contract, int hackingLevel);
 }
@@ -26,6 +27,7 @@ public sealed class ProgressionService(IOptions<ProgressionOptions> options) : I
 
     public ProgressionState GetGeneral(long experience) => Calculate(experience, settings.GeneralLevelThresholds);
     public ProgressionState GetHacking(long experience) => Calculate(experience, settings.HackingLevelThresholds);
+    public ProgressionState GetHunting(long experience) => Calculate(experience, settings.HuntingLevelThresholds);
 
     public LevelChange Apply(GameCharacter character)
     {
@@ -33,6 +35,7 @@ public sealed class ProgressionService(IOptions<ProgressionOptions> options) : I
         var oldHackingLevel = character.HackingLevel;
         character.Level = GetGeneral(character.Experience).Level;
         character.HackingLevel = GetHacking(character.HackingExperience).Level;
+        character.HuntingLevel = GetHunting(character.HuntingExperience).Level;
         return new LevelChange(oldLevel, character.Level, oldHackingLevel, character.HackingLevel);
     }
 
@@ -51,7 +54,8 @@ public sealed class ProgressionService(IOptions<ProgressionOptions> options) : I
     {
         if (value.MaximumLevel != 20 ||
             !ValidThresholds(value.GeneralLevelThresholds, value.MaximumLevel) ||
-            !ValidThresholds(value.HackingLevelThresholds, value.MaximumLevel))
+            !ValidThresholds(value.HackingLevelThresholds, value.MaximumLevel) ||
+            !ValidThresholds(value.HuntingLevelThresholds, value.MaximumLevel))
             return false;
 
         return value.HackingChanceBonusPerLevel > 0 && value.HackingChanceBonusPerLevel <= 1 &&

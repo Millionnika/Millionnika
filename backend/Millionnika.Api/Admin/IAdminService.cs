@@ -14,4 +14,8 @@ public interface IAdminService
     Task<AdminMutationResult> UpdateItemAsync(Guid adminId, Guid itemId, UpdateItemRequest request, CancellationToken cancellationToken);
     Task<IReadOnlyList<AdminActionLogResponse>> GetActionLogsAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<AdminAuditLogResponse>> GetAuditLogsAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<AdminHuntingLocationResponse>> GetHuntingLocationsAsync(CancellationToken cancellationToken);
+    Task<AdminMutationResult> UpdateHuntingLocationAsync(Guid adminId, Guid id, UpdateHuntingLocationRequest request, CancellationToken cancellationToken);
+    Task<IReadOnlyList<AdminHuntingTargetResponse>> GetHuntingTargetsAsync(CancellationToken cancellationToken);
+    Task<AdminMutationResult> UpdateHuntingTargetAsync(Guid adminId, Guid id, UpdateHuntingTargetRequest request, CancellationToken cancellationToken);
 }

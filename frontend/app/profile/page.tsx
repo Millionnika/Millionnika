@@ -27,6 +27,7 @@ type Profile = {
   experience: number;
   generalProgress: Progress;
   hackingProgress: Progress;
+  huntingProgress: Progress;
   equipment: EquippedItem[];
 };
 
@@ -132,6 +133,7 @@ export default function ProfilePage() {
         <section className="progress-grid" aria-label="Прогресс персонажа">
           <ProgressCard title="Общий уровень" progress={profile.generalProgress} />
           <ProgressCard title="Взлом" progress={profile.hackingProgress} />
+          <ProgressCard title="Охота на роботов" progress={profile.huntingProgress} />
         </section>
 
         <h2 className="section-title">Характеристики</h2>
@@ -152,7 +154,7 @@ export default function ProfilePage() {
 
         <nav className="game-navigation" aria-label="Игровые действия">
           <Link className="primary-button" href="/contracts">Контракты</Link>
-          <Link className="secondary-button" href="/hacking">Взлом</Link>
+          <Link className="secondary-button" href="/activities">Активности</Link>
           <Link className="secondary-button" href="/implant-center">Имплант-центр</Link>
           <Link className="secondary-button" href="/shop">Магазин</Link>
           <Link className="secondary-button" href="/inventory">Инвентарь</Link>

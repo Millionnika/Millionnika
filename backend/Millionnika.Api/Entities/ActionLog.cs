@@ -16,6 +16,7 @@ public sealed class ActionLog
     public long CreditsAwarded { get; set; }
     public long ExperienceAwarded { get; set; }
     public long HackingExperienceAwarded { get; set; }
+    public long HuntingExperienceAwarded { get; set; }
     public string? StatName { get; set; }
     public int StatGain { get; set; }
     public Guid? ItemId { get; set; }

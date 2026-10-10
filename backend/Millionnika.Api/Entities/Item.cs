@@ -18,6 +18,10 @@ public sealed class Item
     public decimal MinimumArmor { get; set; }
     public decimal MaximumArmor { get; set; }
     public string ArmorCoverage { get; set; } = "{}";
+    public string Caliber { get; set; } = string.Empty;
+    public int ClipSize { get; set; }
+    public int RateOfFireMin { get; set; }
+    public int RateOfFireMax { get; set; }
     public ICollection<PlayerInventoryItem> InventoryEntries { get; set; } = [];
     public ICollection<EquipmentInstance> EquipmentInstances { get; set; } = [];
 }

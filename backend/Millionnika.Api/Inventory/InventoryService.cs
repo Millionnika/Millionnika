@@ -24,7 +24,8 @@ public sealed class InventoryService(
                 item.Id, item.Name, item.Description, item.Price, item.Type,
                 item.EffectResource, item.EffectAmount, item.AllowedSlots,
                 item.MinimumDamage, item.MaximumDamage, item.MinimumAccuracy, item.MaximumAccuracy,
-                item.MinimumArmor, item.MaximumArmor, item.ArmorCoverage))
+                item.MinimumArmor, item.MaximumArmor, item.ArmorCoverage,
+                item.Caliber, item.ClipSize, item.RateOfFireMin, item.RateOfFireMax))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<InventoryItemResponse>> GetInventoryAsync(
@@ -37,7 +38,8 @@ public sealed class InventoryService(
             .Select(entry => new InventoryItemResponse(
                 entry.ItemId, entry.Item.Name, entry.Item.Description, entry.Item.Type,
                 entry.Item.EffectResource, entry.Item.EffectAmount, entry.Quantity, null,
-                0, 0, 0, null, entry.Item.AllowedSlots, entry.Item.ArmorCoverage))
+                0, 0, 0, null, entry.Item.AllowedSlots, entry.Item.ArmorCoverage,
+                entry.Item.Caliber, entry.Item.ClipSize, entry.Item.RateOfFireMin, entry.Item.RateOfFireMax))
             .ToListAsync(cancellationToken);
         var equipment = await dbContext.EquipmentInstances.AsNoTracking()
             .Where(instance => instance.Character.UserId == userId)
@@ -46,7 +48,8 @@ public sealed class InventoryService(
                 instance.ItemId, instance.Item.Name, instance.Item.Description, instance.Item.Type,
                 instance.Item.EffectResource, instance.Item.EffectAmount, 1, instance.Id,
                 instance.Damage, instance.Accuracy, instance.Armor, instance.EquippedSlot,
-                instance.Item.AllowedSlots, instance.Item.ArmorCoverage))
+                instance.Item.AllowedSlots, instance.Item.ArmorCoverage,
+                instance.Item.Caliber, instance.Item.ClipSize, instance.Item.RateOfFireMin, instance.Item.RateOfFireMax))
             .ToListAsync(cancellationToken);
         return consumables.Concat(equipment).ToList();
     }
@@ -68,6 +71,8 @@ public sealed class InventoryService(
             await transaction.CommitAsync(cancellationToken);
             return replay;
         }
+        if (await HuntingRequestExistsAsync(userId, requestId, cancellationToken))
+            return RequestConflict(requestId, character);
 
         var item = await dbContext.Items.SingleOrDefaultAsync(
             candidate => candidate.Id == itemId && candidate.IsActive,
@@ -91,7 +96,7 @@ public sealed class InventoryService(
         }
         else
         {
-            if (item.Type == ItemTypes.Consumable)
+            if (item.Type is ItemTypes.Consumable or ItemTypes.Ammunition)
             {
                 var inventory = await dbContext.InventoryItems.SingleOrDefaultAsync(
                     entry => entry.CharacterId == character.Id && entry.ItemId == itemId, cancellationToken);
@@ -159,6 +164,8 @@ public sealed class InventoryService(
             await transaction.CommitAsync(cancellationToken);
             return replay;
         }
+        if (await HuntingRequestExistsAsync(userId, requestId, cancellationToken))
+            return RequestConflict(requestId, character);
         resourceRecovery.Apply(character);
 
         var item = await dbContext.Items.SingleOrDefaultAsync(
@@ -169,7 +176,12 @@ public sealed class InventoryService(
             cancellationToken);
         ActionLog log;
 
-        if (item is null || item.Type != "consumable")
+        if (await HasActiveHuntAsync(character.Id, cancellationToken))
+        {
+            log = CreateLog(userId, requestId, UseAction, signature, false,
+                "Во время охоты расходники недоступны.", "active_hunt", itemId, quantity);
+        }
+        else if (item is null || item.Type != "consumable")
         {
             log = CreateLog(userId, requestId, UseAction, signature, false,
                 "Этот предмет нельзя использовать.", "item_unavailable", itemId, quantity);
@@ -217,11 +229,15 @@ public sealed class InventoryService(
             await transaction.CommitAsync(cancellationToken);
             return replay;
         }
+        if (await HuntingRequestExistsAsync(userId, requestId, cancellationToken))
+            return RequestConflict(requestId, character);
 
         var instance = await dbContext.EquipmentInstances.Include(value => value.Item)
             .SingleOrDefaultAsync(value => value.Id == instanceId && value.CharacterId == character.Id, cancellationToken);
         ActionLog log;
-        if (instance is null)
+        if (await HasActiveHuntAsync(character.Id, cancellationToken))
+            log = CreateLog(userId, requestId, EquipAction, signature, false, "Во время охоты менять экипировку нельзя.", "active_hunt", instance?.ItemId ?? Guid.Empty, 0);
+        else if (instance is null)
             log = CreateLog(userId, requestId, EquipAction, signature, false, "Экземпляр экипировки не найден у персонажа.", "equipment_not_owned", Guid.Empty, 0);
         else if (!EquipmentSlots.IsValid(slot) || slot == EquipmentSlots.Temporary || !EquipmentSlots.Allows(instance.Item, slot))
             log = CreateLog(userId, requestId, EquipAction, signature, false, "Предмет нельзя надеть в выбранный слот.", "invalid_equipment_slot", instance.ItemId, 1);
@@ -254,12 +270,16 @@ public sealed class InventoryService(
             await transaction.CommitAsync(cancellationToken);
             return replay;
         }
+        if (await HuntingRequestExistsAsync(userId, requestId, cancellationToken))
+            return RequestConflict(requestId, character);
         var instance = await dbContext.EquipmentInstances.Include(value => value.Item)
             .SingleOrDefaultAsync(value => value.CharacterId == character.Id && value.EquippedSlot == slot, cancellationToken);
         var itemId = instance?.ItemId ?? Guid.Empty;
-        if (instance is not null) instance.EquippedSlot = null;
-        var log = CreateLog(userId, requestId, UnequipAction, signature, true,
-            instance is null ? "Слот уже пуст." : $"Снято: {instance.Item.Name}.", null, itemId, instance is null ? 0 : 1);
+        var activeHunt = await HasActiveHuntAsync(character.Id, cancellationToken);
+        if (instance is not null && !activeHunt) instance.EquippedSlot = null;
+        var log = CreateLog(userId, requestId, UnequipAction, signature, !activeHunt,
+            activeHunt ? "Во время охоты менять экипировку нельзя." : instance is null ? "Слот уже пуст." : $"Снято: {instance.Item.Name}.",
+            activeHunt ? "active_hunt" : null, itemId, instance is null ? 0 : 1);
         dbContext.ActionLogs.Add(log);
         await dbContext.SaveChangesAsync(cancellationToken);
         var result = await BuildResultAsync(log, character, cancellationToken);
@@ -357,6 +377,12 @@ public sealed class InventoryService(
         dbContext.ActionLogs.AsNoTracking().SingleOrDefaultAsync(
             log => log.UserId == userId && log.RequestId == requestId,
             cancellationToken);
+
+    private Task<bool> HasActiveHuntAsync(Guid characterId, CancellationToken cancellationToken) =>
+        dbContext.HuntFights.AnyAsync(value => value.CharacterId == characterId && value.Status == "active", cancellationToken);
+
+    private Task<bool> HuntingRequestExistsAsync(Guid userId, Guid requestId, CancellationToken cancellationToken) =>
+        dbContext.HuntingRequests.AsNoTracking().AnyAsync(value => value.UserId == userId && value.RequestId == requestId, cancellationToken);
 
     private ActionLog CreateLog(
         Guid userId,
