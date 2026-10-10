@@ -66,6 +66,7 @@ builder.Services.AddSingleton<IRandomSource, RandomSource>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IResourceRecoveryService, ResourceRecoveryService>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
+builder.Services.AddSingleton<IEquipmentRoller, EquipmentRoller>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IPlayerDirectoryService, PlayerDirectoryService>();
 builder.Services.AddScoped<IFriendService, FriendService>();

@@ -22,7 +22,15 @@ public sealed record CreateContractRequest(
     string Direction = ContractDirections.Normal, int MinimumLevel = 1,
     int MinimumHackingLevel = 1, long RewardHackingExperience = 0);
 public sealed record UpdateItemRequest(
-    long Price, string? Description, string? EffectResource, int EffectAmount, bool IsActive, string? Reason);
+    long Price, string? Description, string? EffectResource, int EffectAmount, bool IsActive, string? Reason,
+    decimal MinimumDamage = 0, decimal MaximumDamage = 0,
+    decimal MinimumAccuracy = 0, decimal MaximumAccuracy = 0,
+    decimal MinimumArmor = 0, decimal MaximumArmor = 0, string ArmorCoverage = "{}");
+public sealed record CreateItemRequest(
+    string? Name, string? Description, long Price, string Type, string? EffectResource,
+    int EffectAmount, string AllowedSlots, decimal MinimumDamage, decimal MaximumDamage,
+    decimal MinimumAccuracy, decimal MaximumAccuracy, decimal MinimumArmor, decimal MaximumArmor,
+    string ArmorCoverage, bool IsActive, string? Reason);
 
 public sealed record AdminContractResponse(
     Guid Id, string Name, string Description, int CostNerve, decimal SuccessChance,
@@ -31,7 +39,9 @@ public sealed record AdminContractResponse(
 
 public sealed record AdminItemResponse(
     Guid Id, string Name, string Description, long Price, string Type,
-    string EffectResource, int EffectAmount, bool IsActive);
+    string EffectResource, int EffectAmount, bool IsActive, string AllowedSlots,
+    decimal MinimumDamage, decimal MaximumDamage, decimal MinimumAccuracy, decimal MaximumAccuracy,
+    decimal MinimumArmor, decimal MaximumArmor, string ArmorCoverage);
 
 public sealed record AdminActionLogResponse(
     Guid Id, string Username, string ActionType, bool Succeeded, string Message, DateTimeOffset CreatedAtUtc);

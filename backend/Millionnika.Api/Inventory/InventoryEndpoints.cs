@@ -11,6 +11,8 @@ public static class InventoryEndpoints
         game.MapPost("/shop/buy", BuyAsync);
         game.MapGet("/inventory", GetInventoryAsync);
         game.MapPost("/inventory/use", UseAsync);
+        game.MapPost("/inventory/equip", EquipAsync);
+        game.MapPost("/inventory/unequip", UnequipAsync);
         return endpoints;
     }
 
@@ -50,6 +52,27 @@ public static class InventoryEndpoints
 
         var result = await service.UseAsync(
             GetUserId(principal), request.RequestId, request.ItemId, request.Quantity, cancellationToken);
+        return result.Rejected ? Results.Conflict(result.Response) : Results.Ok(result.Response);
+    }
+
+    private static async Task<IResult> EquipAsync(EquipItemRequest request, ClaimsPrincipal principal,
+        IInventoryService service, CancellationToken cancellationToken)
+    {
+        if (request.RequestId == Guid.Empty || request.InstanceId == Guid.Empty ||
+            !EquipmentSlots.IsValid(request.Slot) || request.Slot == EquipmentSlots.Temporary)
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["equipment"] = ["Проверьте экземпляр и слот экипировки."] });
+        var result = await service.EquipAsync(GetUserId(principal), request.RequestId,
+            request.InstanceId, request.Slot!, cancellationToken);
+        return result.Rejected ? Results.Conflict(result.Response) : Results.Ok(result.Response);
+    }
+
+    private static async Task<IResult> UnequipAsync(UnequipItemRequest request, ClaimsPrincipal principal,
+        IInventoryService service, CancellationToken cancellationToken)
+    {
+        if (request.RequestId == Guid.Empty || !EquipmentSlots.IsValid(request.Slot))
+            return Results.ValidationProblem(new Dictionary<string, string[]> { ["equipment"] = ["Проверьте слот экипировки."] });
+        var result = await service.UnequipAsync(GetUserId(principal), request.RequestId,
+            request.Slot!, cancellationToken);
         return result.Rejected ? Results.Conflict(result.Response) : Results.Ok(result.Response);
     }
 

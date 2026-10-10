@@ -2,6 +2,8 @@ namespace Millionnika.Api.Inventory;
 
 public sealed record PurchaseRequest(Guid RequestId, Guid ItemId, int Quantity);
 public sealed record UseItemRequest(Guid RequestId, Guid ItemId, int Quantity);
+public sealed record EquipItemRequest(Guid RequestId, Guid InstanceId, string? Slot);
+public sealed record UnequipItemRequest(Guid RequestId, string? Slot);
 
 public sealed record ShopItemResponse(
     Guid Id,
@@ -10,7 +12,15 @@ public sealed record ShopItemResponse(
     long Price,
     string Type,
     string EffectResource,
-    int EffectAmount);
+    int EffectAmount,
+    string AllowedSlots,
+    decimal MinimumDamage,
+    decimal MaximumDamage,
+    decimal MinimumAccuracy,
+    decimal MaximumAccuracy,
+    decimal MinimumArmor,
+    decimal MaximumArmor,
+    string ArmorCoverage);
 
 public sealed record InventoryItemResponse(
     Guid ItemId,
@@ -19,7 +29,14 @@ public sealed record InventoryItemResponse(
     string Type,
     string EffectResource,
     int EffectAmount,
-    int Quantity);
+    int Quantity,
+    Guid? InstanceId,
+    decimal Damage,
+    decimal Accuracy,
+    decimal Armor,
+    string? EquippedSlot,
+    string AllowedSlots,
+    string ArmorCoverage);
 
 public sealed record InventoryResourcesResponse(
     int Energy,

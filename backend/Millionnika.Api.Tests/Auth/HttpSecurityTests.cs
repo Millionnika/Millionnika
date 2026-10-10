@@ -110,6 +110,8 @@ public sealed class HttpSecurityTests : IAsyncLifetime
     [InlineData("/api/game/contract/execute", "POST")]
     [InlineData("/api/game/shop/buy", "POST")]
     [InlineData("/api/game/inventory/use", "POST")]
+    [InlineData("/api/game/inventory/equip", "POST")]
+    [InlineData("/api/game/inventory/unequip", "POST")]
     [InlineData("/api/friends/requests", "POST")]
     [InlineData("/api/friends/requests/00000000-0000-0000-0000-000000000001/accept", "POST")]
     [InlineData("/api/friends/requests/00000000-0000-0000-0000-000000000001/reject", "POST")]
@@ -120,6 +122,7 @@ public sealed class HttpSecurityTests : IAsyncLifetime
     [InlineData("/api/admin/players/00000000-0000-0000-0000-000000000001/block", "PUT")]
     [InlineData("/api/admin/contracts/00000000-0000-0000-0000-000000000001", "PUT")]
     [InlineData("/api/admin/items/00000000-0000-0000-0000-000000000001", "PUT")]
+    [InlineData("/api/admin/items", "POST")]
     public async Task AllUnsafeRoutes_RejectMissingAndInvalidCsrf(string path, string method)
     {
         await StartAsync();

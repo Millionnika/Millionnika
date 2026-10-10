@@ -10,6 +10,7 @@ public interface IAdminService
     Task<AdminMutationResult> CreateContractAsync(Guid adminId, CreateContractRequest request, CancellationToken cancellationToken);
     Task<AdminMutationResult> UpdateContractAsync(Guid adminId, Guid contractId, UpdateContractRequest request, CancellationToken cancellationToken);
     Task<IReadOnlyList<AdminItemResponse>> GetItemsAsync(CancellationToken cancellationToken);
+    Task<AdminMutationResult> CreateItemAsync(Guid adminId, CreateItemRequest request, CancellationToken cancellationToken);
     Task<AdminMutationResult> UpdateItemAsync(Guid adminId, Guid itemId, UpdateItemRequest request, CancellationToken cancellationToken);
     Task<IReadOnlyList<AdminActionLogResponse>> GetActionLogsAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<AdminAuditLogResponse>> GetAuditLogsAsync(CancellationToken cancellationToken);

@@ -297,7 +297,7 @@ public sealed class InventoryServiceIntegrationTests
             NerveAmount = 1,
             NerveIntervalMinutes = 5
         });
-        return new InventoryService(dbContext, new ResourceRecoveryService(options, TimeProvider.System));
+        return new InventoryService(dbContext, new ResourceRecoveryService(options, TimeProvider.System), new EquipmentRoller());
     }
 
     private static GameDbContext CreateDbContext() => TestDatabase.CreateDbContext();

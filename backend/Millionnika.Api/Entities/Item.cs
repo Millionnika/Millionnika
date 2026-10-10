@@ -10,5 +10,14 @@ public sealed class Item
     public bool IsActive { get; set; }
     public string EffectResource { get; set; } = string.Empty;
     public int EffectAmount { get; set; }
+    public string AllowedSlots { get; set; } = string.Empty;
+    public decimal MinimumDamage { get; set; }
+    public decimal MaximumDamage { get; set; }
+    public decimal MinimumAccuracy { get; set; }
+    public decimal MaximumAccuracy { get; set; }
+    public decimal MinimumArmor { get; set; }
+    public decimal MaximumArmor { get; set; }
+    public string ArmorCoverage { get; set; } = "{}";
     public ICollection<PlayerInventoryItem> InventoryEntries { get; set; } = [];
+    public ICollection<EquipmentInstance> EquipmentInstances { get; set; } = [];
 }

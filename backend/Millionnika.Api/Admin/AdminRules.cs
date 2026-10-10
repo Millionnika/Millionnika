@@ -1,6 +1,8 @@
 namespace Millionnika.Api.Admin;
 
 using Millionnika.Api.Game;
+using Millionnika.Api.Entities;
+using Millionnika.Api.Inventory;
 
 public static class AdminRules
 {
@@ -46,9 +48,36 @@ public static class AdminRules
     private static bool IsContractTextValid(string? value, int maximum) =>
         value?.Trim().Length is >= 1 && value.Trim().Length <= maximum;
 
-    public static bool IsItemValid(UpdateItemRequest request) =>
+    public static bool IsItemValid(Item item, UpdateItemRequest request)
+    {
+        ApplyEditableDefinition(item, request);
+        return IsItemValid(item, request.Reason);
+    }
+
+    public static bool IsItemValid(Item item, string? reason) =>
+        item.Price is >= 0 and <= GameNumericLimits.MaxEconomyValue &&
+        item.Name.Trim().Length is >= 1 and <= 120 &&
+        item.Description.Trim().Length is >= 1 and <= 500 &&
+        EquipmentRules.IsDefinitionValid(item) && IsReasonValid(reason);
+
+    public static void ApplyEditableDefinition(Item item, UpdateItemRequest request)
+    {
+        item.Price = request.Price;
+        item.Description = request.Description?.Trim() ?? string.Empty;
+        item.EffectResource = request.EffectResource?.Trim() ?? string.Empty;
+        item.EffectAmount = request.EffectAmount;
+        item.MinimumDamage = request.MinimumDamage; item.MaximumDamage = request.MaximumDamage;
+        item.MinimumAccuracy = request.MinimumAccuracy; item.MaximumAccuracy = request.MaximumAccuracy;
+        item.MinimumArmor = request.MinimumArmor; item.MaximumArmor = request.MaximumArmor;
+        item.ArmorCoverage = request.ArmorCoverage ?? "{}";
+        item.IsActive = request.IsActive;
+    }
+
+    public static bool IsLegacyConsumableRequest(UpdateItemRequest request) =>
         request.Price is >= 0 and <= GameNumericLimits.MaxEconomyValue &&
         request.Description?.Trim().Length is >= 1 and <= 500 &&
         request.EffectResource is "energy" or "nerve" or "health" &&
         request.EffectAmount > 0 && IsReasonValid(request.Reason);
+
+    public static bool IsItemValid(UpdateItemRequest request) => IsLegacyConsumableRequest(request);
 }

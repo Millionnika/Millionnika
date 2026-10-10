@@ -51,9 +51,9 @@ partial class NpcShopInventory
                 table.HasCheckConstraint("CK_items_Price", "\"Price\" >= 0");
             });
             entity.HasData(
-                new { Id = Guid.Parse("11111111-1111-1111-1111-111111111001"), Description = "Быстрый нейропитательный батончик. Восстанавливает 10 энергии.", EffectAmount = 10, EffectResource = "energy", IsActive = true, Name = "Нейро-снэк", Price = 25L, Type = "consumable" },
-                new { Id = Guid.Parse("11111111-1111-1111-1111-111111111002"), Description = "Стабилизирует нервную систему. Восстанавливает 3 хладнокровия.", EffectAmount = 3, EffectResource = "nerve", IsActive = true, Name = "Успокоитель", Price = 20L, Type = "consumable" },
-                new { Id = Guid.Parse("11111111-1111-1111-1111-111111111003"), Description = "Медицинский наногель. Восстанавливает 20 здоровья.", EffectAmount = 20, EffectResource = "health", IsActive = true, Name = "Аптечный наногель", Price = 35L, Type = "consumable" });
+                new { Id = Guid.Parse("11111111-1111-1111-1111-111111111001"), Description = "Быстрый нейропитательный батончик. Восстанавливает 10 энергии.", EffectAmount = 10, EffectResource = "energy", IsActive = true, Name = "Нейро-снэк", Price = 25L, Type = "consumable", AllowedSlots = "", ArmorCoverage = "{}", MinimumDamage = 0m, MaximumDamage = 0m, MinimumAccuracy = 0m, MaximumAccuracy = 0m, MinimumArmor = 0m, MaximumArmor = 0m },
+                new { Id = Guid.Parse("11111111-1111-1111-1111-111111111002"), Description = "Стабилизирует нервную систему. Восстанавливает 3 хладнокровия.", EffectAmount = 3, EffectResource = "nerve", IsActive = true, Name = "Успокоитель", Price = 20L, Type = "consumable", AllowedSlots = "", ArmorCoverage = "{}", MinimumDamage = 0m, MaximumDamage = 0m, MinimumAccuracy = 0m, MaximumAccuracy = 0m, MinimumArmor = 0m, MaximumArmor = 0m },
+                new { Id = Guid.Parse("11111111-1111-1111-1111-111111111003"), Description = "Медицинский наногель. Восстанавливает 20 здоровья.", EffectAmount = 20, EffectResource = "health", IsActive = true, Name = "Аптечный наногель", Price = 35L, Type = "consumable", AllowedSlots = "", ArmorCoverage = "{}", MinimumDamage = 0m, MaximumDamage = 0m, MinimumAccuracy = 0m, MaximumAccuracy = 0m, MinimumArmor = 0m, MaximumArmor = 0m });
         });
 
         modelBuilder.Entity("Millionnika.Api.Entities.PlayerInventoryItem", entity =>

@@ -21,7 +21,12 @@ public sealed record ProfileResponse(
     int Dexterity,
     long Experience,
     ProgressionState GeneralProgress,
-    ProgressionState HackingProgress);
+    ProgressionState HackingProgress,
+    IReadOnlyList<EquippedItemResponse> Equipment);
+
+public sealed record EquippedItemResponse(
+    Guid InstanceId, string Slot, string Name, string Type,
+    decimal Damage, decimal Accuracy, decimal Armor, string ArmorCoverage);
 
 public sealed record ResourceValue(
     int Current,

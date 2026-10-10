@@ -13,6 +13,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
     public DbSet<ActionLog> ActionLogs => Set<ActionLog>();
     public DbSet<Item> Items => Set<Item>();
     public DbSet<PlayerInventoryItem> InventoryItems => Set<PlayerInventoryItem>();
+    public DbSet<EquipmentInstance> EquipmentInstances => Set<EquipmentInstance>();
     public DbSet<AdminAuditLog> AdminAuditLogs => Set<AdminAuditLog>();
     public DbSet<FriendRelation> FriendRelations => Set<FriendRelation>();
 
@@ -98,13 +99,22 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
             entity.ToTable("items", table =>
             {
                 table.HasCheckConstraint("CK_items_Price", $"\"Price\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
-                table.HasCheckConstraint("CK_items_EffectAmount", "\"EffectAmount\" > 0");
+                table.HasCheckConstraint("CK_items_EffectAmount", "(\"Type\" = 'consumable' AND \"EffectAmount\" > 0) OR (\"Type\" IN ('weapon','armor') AND \"EffectAmount\" = 0)");
+                table.HasCheckConstraint("CK_items_EquipmentRatings", "\"MinimumDamage\" BETWEEN 0 AND 1000 AND \"MaximumDamage\" BETWEEN \"MinimumDamage\" AND 1000 AND \"MinimumAccuracy\" BETWEEN 0 AND 100 AND \"MaximumAccuracy\" BETWEEN \"MinimumAccuracy\" AND 100 AND \"MinimumArmor\" BETWEEN 0 AND 100 AND \"MaximumArmor\" BETWEEN \"MinimumArmor\" AND 100");
             });
             entity.HasKey(item => item.Id);
             entity.Property(item => item.Name).HasMaxLength(120).IsRequired();
             entity.Property(item => item.Description).HasMaxLength(500).IsRequired();
             entity.Property(item => item.Type).HasMaxLength(32).IsRequired();
             entity.Property(item => item.EffectResource).HasMaxLength(16).IsRequired();
+            entity.Property(item => item.AllowedSlots).HasMaxLength(80).IsRequired();
+            entity.Property(item => item.MinimumDamage).HasPrecision(7, 2);
+            entity.Property(item => item.MaximumDamage).HasPrecision(7, 2);
+            entity.Property(item => item.MinimumAccuracy).HasPrecision(5, 2);
+            entity.Property(item => item.MaximumAccuracy).HasPrecision(5, 2);
+            entity.Property(item => item.MinimumArmor).HasPrecision(5, 2);
+            entity.Property(item => item.MaximumArmor).HasPrecision(5, 2);
+            entity.Property(item => item.ArmorCoverage).HasColumnType("jsonb").IsRequired();
             entity.HasData(
                 new Item
                 {
@@ -155,6 +165,27 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
                 .WithMany(item => item.InventoryEntries)
                 .HasForeignKey(entry => entry.ItemId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<EquipmentInstance>(entity =>
+        {
+            entity.ToTable("equipment_instances", table =>
+            {
+                table.HasCheckConstraint("CK_equipment_instances_Ratings", "\"Damage\" BETWEEN 0 AND 1000 AND \"Accuracy\" BETWEEN 0 AND 100 AND \"Armor\" BETWEEN 0 AND 100");
+                table.HasCheckConstraint("CK_equipment_instances_Slot", "\"EquippedSlot\" IS NULL OR \"EquippedSlot\" IN ('primary','secondary','melee','temporary','helmet','body','pants','gloves','boots')");
+            });
+            entity.HasKey(instance => instance.Id);
+            entity.Property(instance => instance.Damage).HasPrecision(7, 2);
+            entity.Property(instance => instance.Accuracy).HasPrecision(5, 2);
+            entity.Property(instance => instance.Armor).HasPrecision(5, 2);
+            entity.Property(instance => instance.EquippedSlot).HasMaxLength(16);
+            entity.HasIndex(instance => new { instance.CharacterId, instance.EquippedSlot }).IsUnique()
+                .HasFilter("\"EquippedSlot\" IS NOT NULL");
+            entity.HasIndex(instance => new { instance.CharacterId, instance.ItemId });
+            entity.HasOne(instance => instance.Character).WithMany(character => character.Equipment)
+                .HasForeignKey(instance => instance.CharacterId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(instance => instance.Item).WithMany(item => item.EquipmentInstances)
+                .HasForeignKey(instance => instance.ItemId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<AdminAuditLog>(entity =>

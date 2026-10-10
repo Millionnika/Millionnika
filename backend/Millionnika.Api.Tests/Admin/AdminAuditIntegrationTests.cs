@@ -132,6 +132,44 @@ public sealed class AdminAuditIntegrationTests
         }
     }
 
+    [Fact]
+    public async Task AdminCanCreateEquipment_AndAuditContainsDefinitionWithoutSecrets()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var admin = CreateUser($"Admin{Guid.NewGuid():N}"[..20], "Admin", now);
+        await using (var setup = CreateDbContext()) { setup.Users.Add(admin); await setup.SaveChangesAsync(); }
+        Guid itemId = Guid.Empty;
+        try
+        {
+            await using var db = CreateDbContext();
+            var result = await CreateService(db).CreateItemAsync(admin.Id,
+                new CreateItemRequest("Тестовый клинок", "Только для проверки определения.", 25,
+                    "weapon", "", 0, "melee", 10, 12, 40, 45, 0, 0, "{}", true,
+                    "Проверка создания экипировки"), default);
+            Assert.True(result.Succeeded);
+
+            await using var verify = CreateDbContext();
+            var item = await verify.Items.SingleAsync(value => value.Name == "Тестовый клинок");
+            itemId = item.Id;
+            var audit = await verify.AdminAuditLogs.SingleAsync(value => value.TargetId == item.Id.ToString());
+            Assert.Equal("item_create", audit.Action);
+            Assert.Equal("weapon", item.Type);
+            Assert.Equal("melee", item.AllowedSlots);
+            Assert.Contains("MinimumDamage", audit.NewValue);
+            Assert.DoesNotContain("Password", audit.NewValue, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            await using var cleanup = CreateDbContext();
+            if (itemId != Guid.Empty)
+            {
+                await cleanup.AdminAuditLogs.Where(value => value.TargetId == itemId.ToString()).ExecuteDeleteAsync();
+                await cleanup.Items.Where(value => value.Id == itemId).ExecuteDeleteAsync();
+            }
+            await cleanup.Users.Where(value => value.Id == admin.Id).ExecuteDeleteAsync();
+        }
+    }
+
     private static AdminService CreateService(GameDbContext db)
     {
         var options = Options.Create(new ResourceRecoveryOptions

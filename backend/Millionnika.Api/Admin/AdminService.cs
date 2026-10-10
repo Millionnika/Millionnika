@@ -157,14 +157,39 @@ public sealed class AdminService(
         await dbContext.Items.AsNoTracking().OrderBy(item => item.Name)
             .Select(item => new AdminItemResponse(
                 item.Id, item.Name, item.Description, item.Price, item.Type,
-                item.EffectResource, item.EffectAmount, item.IsActive))
+                item.EffectResource, item.EffectAmount, item.IsActive, item.AllowedSlots,
+                item.MinimumDamage, item.MaximumDamage, item.MinimumAccuracy, item.MaximumAccuracy,
+                item.MinimumArmor, item.MaximumArmor, item.ArmorCoverage))
             .ToListAsync(cancellationToken);
+
+    public async Task<AdminMutationResult> CreateItemAsync(
+        Guid adminId, CreateItemRequest request, CancellationToken cancellationToken)
+    {
+        var item = new Item
+        {
+            Id = Guid.NewGuid(), Name = request.Name?.Trim() ?? string.Empty,
+            Description = request.Description?.Trim() ?? string.Empty, Price = request.Price,
+            Type = request.Type, EffectResource = request.EffectResource?.Trim() ?? string.Empty,
+            EffectAmount = request.EffectAmount, AllowedSlots = request.AllowedSlots?.Trim() ?? string.Empty,
+            MinimumDamage = request.MinimumDamage, MaximumDamage = request.MaximumDamage,
+            MinimumAccuracy = request.MinimumAccuracy, MaximumAccuracy = request.MaximumAccuracy,
+            MinimumArmor = request.MinimumArmor, MaximumArmor = request.MaximumArmor,
+            ArmorCoverage = request.ArmorCoverage ?? "{}", IsActive = request.IsActive
+        };
+        if (!AdminRules.IsItemValid(item, request.Reason))
+            return InvalidItem();
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        dbContext.Items.Add(item);
+        AddAudit(adminId, "item_create", "item", item.Id.ToString(), new { Exists = false },
+            ItemValues(item), request.Reason!);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return AdminMutationResult.Success("Предмет создан.");
+    }
 
     public async Task<AdminMutationResult> UpdateItemAsync(
         Guid adminId, Guid itemId, UpdateItemRequest request, CancellationToken cancellationToken)
     {
-        if (!AdminRules.IsItemValid(request))
-            return AdminMutationResult.Failure("Проверьте параметры предмета: цена не может превышать 1 триллион.");
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var item = await dbContext.Items
             .FromSqlInterpolated($"SELECT * FROM items WHERE \"Id\" = {itemId} FOR UPDATE")
@@ -172,11 +197,7 @@ public sealed class AdminService(
         if (item is null) return AdminMutationResult.Failure("Предмет не найден.");
 
         var oldValue = ItemValues(item);
-        item.Price = request.Price;
-        item.Description = request.Description!.Trim();
-        item.EffectResource = request.EffectResource!;
-        item.EffectAmount = request.EffectAmount;
-        item.IsActive = request.IsActive;
+        if (!AdminRules.IsItemValid(item, request)) return InvalidItem();
         AddAudit(adminId, "item_update", "item", itemId.ToString(), oldValue,
             ItemValues(item), request.Reason!);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -227,8 +248,13 @@ public sealed class AdminService(
 
     private static object ItemValues(Item item) => new
     {
-        item.Price, item.Description, item.EffectResource, item.EffectAmount, item.IsActive
+        item.Name, item.Price, item.Description, item.Type, item.EffectResource, item.EffectAmount,
+        item.AllowedSlots, item.MinimumDamage, item.MaximumDamage, item.MinimumAccuracy,
+        item.MaximumAccuracy, item.MinimumArmor, item.MaximumArmor, item.ArmorCoverage, item.IsActive
     };
+
+    private static AdminMutationResult InvalidItem() => AdminMutationResult.Failure(
+        "Проверьте тип, слоты, цену, диапазоны рейтингов, покрытие и причину изменения предмета.");
 
     private static AdminMutationResult InvalidReason() =>
         AdminMutationResult.Failure("Укажите причину длиной от 3 до 500 символов.");

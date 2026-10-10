@@ -146,6 +146,13 @@ public sealed class AuthService(
             .SingleAsync(cancellationToken);
         var recovery = resourceRecovery.Apply(character);
         progression.Apply(character);
+        var equipment = await dbContext.EquipmentInstances.AsNoTracking()
+            .Where(instance => instance.CharacterId == character.Id && instance.EquippedSlot != null)
+            .OrderBy(instance => instance.EquippedSlot)
+            .Select(instance => new EquippedItemResponse(
+                instance.Id, instance.EquippedSlot!, instance.Item.Name, instance.Item.Type,
+                instance.Damage, instance.Accuracy, instance.Armor, instance.Item.ArmorCoverage))
+            .ToListAsync(cancellationToken);
 
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -164,7 +171,8 @@ public sealed class AuthService(
             character.Dexterity,
             character.Experience,
             progression.GetGeneral(character.Experience),
-            progression.GetHacking(character.HackingExperience));
+            progression.GetHacking(character.HackingExperience),
+            equipment);
     }
 
     private static string Normalize(string value) => value.ToUpperInvariant();

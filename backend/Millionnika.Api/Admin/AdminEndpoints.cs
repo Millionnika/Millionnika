@@ -17,6 +17,7 @@ public static class AdminEndpoints
         admin.MapPost("/contracts", CreateContractAsync);
         admin.MapPut("/contracts/{contractId:guid}", UpdateContractAsync);
         admin.MapGet("/items", GetItemsAsync);
+        admin.MapPost("/items", CreateItemAsync);
         admin.MapPut("/items/{itemId:guid}", UpdateItemAsync);
         admin.MapGet("/action-logs", GetActionLogsAsync);
         admin.MapGet("/audit-logs", GetAuditLogsAsync);
@@ -62,6 +63,10 @@ public static class AdminEndpoints
         Guid itemId, UpdateItemRequest request, ClaimsPrincipal principal,
         IAdminService service, CancellationToken token) =>
         ToResult(await service.UpdateItemAsync(GetUserId(principal), itemId, request, token));
+
+    private static async Task<IResult> CreateItemAsync(
+        CreateItemRequest request, ClaimsPrincipal principal, IAdminService service, CancellationToken token) =>
+        ToResult(await service.CreateItemAsync(GetUserId(principal), request, token), created: true);
 
     private static async Task<IResult> GetActionLogsAsync(IAdminService service, CancellationToken token) =>
         Results.Ok(await service.GetActionLogsAsync(token));

@@ -15,6 +15,9 @@ public static class ActionRequestSignature
     public static string UseItem(Guid itemId, int quantity) =>
         Build("item_use", itemId, quantity);
 
+    public static string Equip(Guid instanceId, string slot) => $"item_equip:v1:{instanceId:D}:{slot}";
+    public static string Unequip(string slot) => $"item_unequip:v1:{slot}";
+
     private static string Build(string action, Guid itemId, int quantity) =>
         string.Create(CultureInfo.InvariantCulture, $"{action}:v1:{itemId:D}:{quantity}");
 }

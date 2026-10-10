@@ -8,10 +8,13 @@ namespace Millionnika.Api.Inventory;
 
 public sealed class InventoryService(
     GameDbContext dbContext,
-    IResourceRecoveryService resourceRecovery) : IInventoryService
+    IResourceRecoveryService resourceRecovery,
+    IEquipmentRoller equipmentRoller) : IInventoryService
 {
     private const string PurchaseAction = "shop_purchase";
     private const string UseAction = "item_use";
+    private const string EquipAction = "item_equip";
+    private const string UnequipAction = "item_unequip";
 
     public async Task<IReadOnlyList<ShopItemResponse>> GetShopAsync(CancellationToken cancellationToken) =>
         await dbContext.Items.AsNoTracking()
@@ -19,19 +22,34 @@ public sealed class InventoryService(
             .OrderBy(item => item.Price)
             .Select(item => new ShopItemResponse(
                 item.Id, item.Name, item.Description, item.Price, item.Type,
-                item.EffectResource, item.EffectAmount))
+                item.EffectResource, item.EffectAmount, item.AllowedSlots,
+                item.MinimumDamage, item.MaximumDamage, item.MinimumAccuracy, item.MaximumAccuracy,
+                item.MinimumArmor, item.MaximumArmor, item.ArmorCoverage))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<InventoryItemResponse>> GetInventoryAsync(
         Guid userId,
-        CancellationToken cancellationToken) =>
-        await dbContext.InventoryItems.AsNoTracking()
+        CancellationToken cancellationToken)
+    {
+        var consumables = await dbContext.InventoryItems.AsNoTracking()
             .Where(entry => entry.Character.UserId == userId && entry.Quantity > 0)
             .OrderBy(entry => entry.Item.Name)
             .Select(entry => new InventoryItemResponse(
                 entry.ItemId, entry.Item.Name, entry.Item.Description, entry.Item.Type,
-                entry.Item.EffectResource, entry.Item.EffectAmount, entry.Quantity))
+                entry.Item.EffectResource, entry.Item.EffectAmount, entry.Quantity, null,
+                0, 0, 0, null, entry.Item.AllowedSlots, entry.Item.ArmorCoverage))
             .ToListAsync(cancellationToken);
+        var equipment = await dbContext.EquipmentInstances.AsNoTracking()
+            .Where(instance => instance.Character.UserId == userId)
+            .OrderBy(instance => instance.Item.Name).ThenBy(instance => instance.Id)
+            .Select(instance => new InventoryItemResponse(
+                instance.ItemId, instance.Item.Name, instance.Item.Description, instance.Item.Type,
+                instance.Item.EffectResource, instance.Item.EffectAmount, 1, instance.Id,
+                instance.Damage, instance.Accuracy, instance.Armor, instance.EquippedSlot,
+                instance.Item.AllowedSlots, instance.Item.ArmorCoverage))
+            .ToListAsync(cancellationToken);
+        return consumables.Concat(equipment).ToList();
+    }
 
     public async Task<InventoryActionResult> BuyAsync(
         Guid userId,
@@ -73,36 +91,44 @@ public sealed class InventoryService(
         }
         else
         {
-            var inventory = await dbContext.InventoryItems.SingleOrDefaultAsync(
-                entry => entry.CharacterId == character.Id && entry.ItemId == itemId,
-                cancellationToken);
-
-            if (inventory is not null && inventory.Quantity > int.MaxValue - quantity)
+            if (item.Type == ItemTypes.Consumable)
             {
-                log = CreateLog(userId, requestId, PurchaseAction, signature, false,
-                    "Достигнут предел количества предмета.", "inventory_limit", itemId, quantity);
-            }
-            else
-            {
-                character.Credits -= totalPrice;
-                if (inventory is null)
+                var inventory = await dbContext.InventoryItems.SingleOrDefaultAsync(
+                    entry => entry.CharacterId == character.Id && entry.ItemId == itemId, cancellationToken);
+                if (inventory is not null && inventory.Quantity > int.MaxValue - quantity)
                 {
-                    dbContext.InventoryItems.Add(new PlayerInventoryItem
-                    {
-                        Id = Guid.NewGuid(),
-                        CharacterId = character.Id,
-                        ItemId = itemId,
-                        Quantity = quantity
-                    });
+                    log = CreateLog(userId, requestId, PurchaseAction, signature, false,
+                        "Достигнут предел количества предмета.", "inventory_limit", itemId, quantity);
                 }
                 else
                 {
-                    inventory.Quantity += quantity;
+                    character.Credits -= totalPrice;
+                    if (inventory is null)
+                        dbContext.InventoryItems.Add(new PlayerInventoryItem { Id = Guid.NewGuid(), CharacterId = character.Id, ItemId = itemId, Quantity = quantity });
+                    else inventory.Quantity += quantity;
+                    log = CreateLog(userId, requestId, PurchaseAction, signature, true,
+                        $"Куплено: {item.Name} ×{quantity}.", null, itemId, quantity, totalPrice);
                 }
-
+            }
+            else if ((item.Type == ItemTypes.Weapon || item.Type == ItemTypes.Armor) && EquipmentRules.IsDefinitionValid(item))
+            {
+                character.Credits -= totalPrice;
+                for (var index = 0; index < quantity; index++)
+                {
+                    dbContext.EquipmentInstances.Add(new EquipmentInstance
+                    {
+                        Id = Guid.NewGuid(), CharacterId = character.Id, ItemId = itemId,
+                        Damage = item.Type == ItemTypes.Weapon ? equipmentRoller.Roll(item.MinimumDamage, item.MaximumDamage) : 0,
+                        Accuracy = item.Type == ItemTypes.Weapon ? equipmentRoller.Roll(item.MinimumAccuracy, item.MaximumAccuracy) : 0,
+                        Armor = item.Type == ItemTypes.Armor ? equipmentRoller.Roll(item.MinimumArmor, item.MaximumArmor) : 0,
+                        CreatedAtUtc = resourceRecovery.UtcNow
+                    });
+                }
                 log = CreateLog(userId, requestId, PurchaseAction, signature, true,
                     $"Куплено: {item.Name} ×{quantity}.", null, itemId, quantity, totalPrice);
             }
+            else log = CreateLog(userId, requestId, PurchaseAction, signature, false,
+                "Определение экипировки некорректно.", "invalid_item_definition", itemId, quantity);
         }
 
         dbContext.ActionLogs.Add(log);
@@ -178,6 +204,69 @@ public sealed class InventoryService(
         return result;
     }
 
+    public async Task<InventoryActionResult> EquipAsync(Guid userId, Guid requestId, Guid instanceId,
+        string slot, CancellationToken cancellationToken)
+    {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var character = await LockCharacterAsync(userId, cancellationToken);
+        var signature = ActionRequestSignature.Equip(instanceId, slot);
+        var existing = await FindExistingAsync(userId, requestId, cancellationToken);
+        if (existing is not null)
+        {
+            var replay = await ReplayAsync(existing, EquipAction, signature, character, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return replay;
+        }
+
+        var instance = await dbContext.EquipmentInstances.Include(value => value.Item)
+            .SingleOrDefaultAsync(value => value.Id == instanceId && value.CharacterId == character.Id, cancellationToken);
+        ActionLog log;
+        if (instance is null)
+            log = CreateLog(userId, requestId, EquipAction, signature, false, "Экземпляр экипировки не найден у персонажа.", "equipment_not_owned", Guid.Empty, 0);
+        else if (!EquipmentSlots.IsValid(slot) || slot == EquipmentSlots.Temporary || !EquipmentSlots.Allows(instance.Item, slot))
+            log = CreateLog(userId, requestId, EquipAction, signature, false, "Предмет нельзя надеть в выбранный слот.", "invalid_equipment_slot", instance.ItemId, 1);
+        else
+        {
+            await dbContext.EquipmentInstances.Where(value => value.CharacterId == character.Id &&
+                value.EquippedSlot == slot && value.Id != instance.Id)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(value => value.EquippedSlot, (string?)null), cancellationToken);
+            instance.EquippedSlot = slot;
+            log = CreateLog(userId, requestId, EquipAction, signature, true,
+                $"Экипировано: {instance.Item.Name}.", null, instance.ItemId, 1);
+        }
+        dbContext.ActionLogs.Add(log);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        var result = await BuildResultAsync(log, character, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return result;
+    }
+
+    public async Task<InventoryActionResult> UnequipAsync(Guid userId, Guid requestId, string slot,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var character = await LockCharacterAsync(userId, cancellationToken);
+        var signature = ActionRequestSignature.Unequip(slot);
+        var existing = await FindExistingAsync(userId, requestId, cancellationToken);
+        if (existing is not null)
+        {
+            var replay = await ReplayAsync(existing, UnequipAction, signature, character, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return replay;
+        }
+        var instance = await dbContext.EquipmentInstances.Include(value => value.Item)
+            .SingleOrDefaultAsync(value => value.CharacterId == character.Id && value.EquippedSlot == slot, cancellationToken);
+        var itemId = instance?.ItemId ?? Guid.Empty;
+        if (instance is not null) instance.EquippedSlot = null;
+        var log = CreateLog(userId, requestId, UnequipAction, signature, true,
+            instance is null ? "Слот уже пуст." : $"Снято: {instance.Item.Name}.", null, itemId, instance is null ? 0 : 1);
+        dbContext.ActionLogs.Add(log);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        var result = await BuildResultAsync(log, character, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return result;
+    }
+
     private async Task<InventoryActionResult> ReplayAsync(
         ActionLog log,
         string expectedAction,
@@ -197,12 +286,14 @@ public sealed class InventoryService(
         CancellationToken cancellationToken,
         bool replayed = false)
     {
-        var inventoryQuantity = log.ItemId is null
+        var inventoryQuantity = log.ItemId is null || log.ItemId == Guid.Empty
             ? 0
             : await dbContext.InventoryItems.AsNoTracking()
                 .Where(entry => entry.CharacterId == character.Id && entry.ItemId == log.ItemId)
                 .Select(entry => entry.Quantity)
-                .SingleOrDefaultAsync(cancellationToken);
+                .SingleOrDefaultAsync(cancellationToken) +
+              await dbContext.EquipmentInstances.AsNoTracking()
+                .CountAsync(entry => entry.CharacterId == character.Id && entry.ItemId == log.ItemId, cancellationToken);
 
         return new InventoryActionResult(
             CreateResponse(log.RequestId, replayed, log.Succeeded, log.Message, character, inventoryQuantity),

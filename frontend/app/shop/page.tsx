@@ -15,6 +15,14 @@ type ShopItem = {
   type: string;
   effectResource: string;
   effectAmount: number;
+  allowedSlots: string;
+  minimumDamage: number;
+  maximumDamage: number;
+  minimumAccuracy: number;
+  maximumAccuracy: number;
+  minimumArmor: number;
+  maximumArmor: number;
+  armorCoverage: string;
 };
 
 type Profile = { credits: number };
@@ -101,6 +109,8 @@ export default function ShopPage() {
               <div>
                 <h2>{item.name}</h2>
                 <p>{item.description}</p>
+                {item.type === "weapon" && <p className="field-hint">Урон {formatRange(item.minimumDamage, item.maximumDamage)} · Точность {formatRange(item.minimumAccuracy, item.maximumAccuracy)}</p>}
+                {item.type === "armor" && <p className="field-hint">Броня {formatRange(item.minimumArmor, item.maximumArmor)} · Слот: {slotName(item.allowedSlots)} · Покрытие: {formatCoverage(item.armorCoverage)}</p>}
               </div>
               <strong>{item.price} кредитов</strong>
               <label>
@@ -127,4 +137,18 @@ export default function ShopPage() {
       </section>
     </main>
   );
+}
+
+function formatRange(minimum: number, maximum: number) {
+  return minimum === maximum ? minimum.toString() : `${minimum}–${maximum}`;
+}
+
+function slotName(slot: string) {
+  return ({ helmet: "голова", body: "корпус", pants: "ноги", gloves: "перчатки", boots: "обувь", primary: "основное", secondary: "вторичное", melee: "ближний бой" } as Record<string, string>)[slot] ?? slot;
+}
+
+function formatCoverage(value: string) {
+  const labels: Record<string, string> = { head: "голова", throat: "горло", heart: "сердце", chest: "грудь", stomach: "живот", arms: "руки", hands: "кисти", groin: "пах", legs: "ноги", feet: "ступни" };
+  try { return Object.entries(JSON.parse(value) as Record<string, number>).map(([part, percent]) => `${labels[part] ?? part} ${percent}%`).join(", "); }
+  catch { return "нет данных"; }
 }

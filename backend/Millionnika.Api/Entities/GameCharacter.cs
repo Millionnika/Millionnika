@@ -23,4 +23,5 @@ public sealed class GameCharacter
     public int HackingLevel { get; set; } = 1;
     public long HackingExperience { get; set; }
     public ICollection<PlayerInventoryItem> Inventory { get; set; } = [];
+    public ICollection<EquipmentInstance> Equipment { get; set; } = [];
 }

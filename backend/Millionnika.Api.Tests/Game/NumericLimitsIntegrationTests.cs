@@ -205,7 +205,7 @@ public sealed class NumericLimitsIntegrationTests
         Options.Create(new TrainingOptions { EnergyCost = 10, StatGain = 1, ExperienceGain = 2 }),
         CreateRecovery(), TestProgression.Create());
 
-    private static InventoryService CreateInventoryService(GameDbContext db) => new(db, CreateRecovery());
+    private static InventoryService CreateInventoryService(GameDbContext db) => new(db, CreateRecovery(), new EquipmentRoller());
 
     private static ResourceRecoveryService CreateRecovery() => new(
         Options.Create(new ResourceRecoveryOptions
