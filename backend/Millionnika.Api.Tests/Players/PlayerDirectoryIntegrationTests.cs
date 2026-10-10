@@ -1,3 +1,4 @@
+using Millionnika.Api.Tests.Infrastructure;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Millionnika.Api.Data;
@@ -7,6 +8,7 @@ using Xunit;
 
 namespace Millionnika.Api.Tests.Players;
 
+[Collection("PostgreSQL integration")]
 public sealed class PlayerDirectoryIntegrationTests
 {
     [Fact]
@@ -103,7 +105,6 @@ public sealed class PlayerDirectoryIntegrationTests
     {
         await using (var setup = CreateDbContext())
         {
-            await setup.Database.MigrateAsync();
             setup.Users.AddRange(users);
             await setup.SaveChangesAsync();
         }
@@ -140,16 +141,6 @@ public sealed class PlayerDirectoryIntegrationTests
         };
     }
 
-    private static GameDbContext CreateDbContext() => new(
-        new DbContextOptionsBuilder<GameDbContext>().UseNpgsql(GetConnectionString()).Options);
+    private static GameDbContext CreateDbContext() => TestDatabase.CreateDbContext();
 
-    private static string GetConnectionString()
-    {
-        var environment = Environment.GetEnvironmentVariable("ConnectionStrings__GameDatabase");
-        if (!string.IsNullOrWhiteSpace(environment)) return environment;
-        var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "Microsoft", "UserSecrets", "millionnika-api-development", "secrets.json");
-        using var document = JsonDocument.Parse(File.ReadAllText(path));
-        return document.RootElement.GetProperty("ConnectionStrings:GameDatabase").GetString()!;
-    }
 }

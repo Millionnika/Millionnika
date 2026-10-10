@@ -6,7 +6,7 @@
 
 Документация: [главный план](docs/MILLIONIKA_MASTER_PLAN.md), [архитектура](docs/ARCHITECTURE.md), [статус](docs/STATUS.md), [проверка и известные проблемы](docs/REVIEW.md), [ТЗ прототипа](docs/PROGRAMMER_SPEC_MVP.md).
 
-Перед публичным запуском нужны исправления из проверки. Git инициализирован, но на дату проверки коммитов и отслеживаемых файлов нет: исходники пока сохранены только на диске.
+Перед публичным запуском нужны оставшиеся исправления из проверки. История Git начата коммитом `76f8c45`; коммит `eb58348` исключил локальные результаты сборок из отслеживания, сохранив файлы на диске. История не переписывалась.
 
 ## Что требуется
 
@@ -102,33 +102,34 @@ npm run build --prefix frontend
 
 ### Тесты — только на отдельной базе
 
-Сейчас интеграционные тесты без явной настройки берут рабочую базу из User Secrets и записывают в неё данные. Не запускайте их так. Подготовьте отдельную базу один раз (пароль PostgreSQL вводится по запросу, не в командной строке):
+Интеграционные тесты требуют отдельную переменную `MILLIONNIKA_TEST_CONNECTION_STRING`. Они не читают User Secrets и игнорируют `ConnectionStrings__GameDatabase`. Без настройки или при недопустимой базе запуск завершается ошибкой до подключения и миграций.
+
+Разрешены только localhost/127.0.0.1/::1, непустой пользователь (не postgres), база `millionnika_tests` либо `millionnika_tests_<суффикс>` из строчных латинских букв, цифр и разделителей `_`. Рабочая база `millionnika` запрещена. Подготовьте отдельную базу один раз (пароль PostgreSQL вводится по запросу, не в командной строке):
 
 ```powershell
 & "D:\PostgreSQL\18\bin\psql.exe" -X -W -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE millionnika_tests OWNER millionnika_app;"
 ```
 
-Если база уже существует, создание пропустите; сбрасывать её не нужно. В отдельном PowerShell установите подключение только для этого окна, не печатая секрет:
+Если база уже существует, создание пропустите; сбрасывать её не нужно. Следующий пример явно собирает отдельную тестовую строку из локальной настройки доступа, заменяя имя базы. Это ручная настройка окна PowerShell, а не fallback тестов. Секрет не выводится:
 
 ```powershell
 cd "D:\Unity Work\Millionnika"
 $testSettings = Get-Content (Join-Path $env:APPDATA "Microsoft\UserSecrets\millionnika-api-development\secrets.json") -Raw | ConvertFrom-Json
 $testConnection = $testSettings.'ConnectionStrings:GameDatabase' -replace '(?i)(^|;)Database=[^;]*', '$1Database=millionnika_tests'
 if ($testConnection -notmatch '(?i)(^|;)Database=millionnika_tests(;|$)') { throw "Тестовая база не выбрана" }
-$env:ConnectionStrings__GameDatabase = $testConnection
-dotnet run --no-launch-profile --project backend\Millionnika.Api -- --urls http://localhost:5081 --environment Development
-```
-
-Дождитесь старта, затем нажмите `Ctrl+C`. Это применяет миграции одним процессом до параллельных тестов и обходит известную гонку чистого старта. В **том же окне**, где установлена переменная:
-
-```powershell
-dotnet test Millionnika.slnx --no-build --no-restore
-Remove-Item Env:ConnectionStrings__GameDatabase
+$env:MILLIONNIKA_TEST_CONNECTION_STRING = $testConnection
+try {
+    dotnet test Millionnika.slnx --no-build --no-restore
+} finally {
+    Remove-Item Env:MILLIONNIKA_TEST_CONNECTION_STRING
+}
 $testConnection = $null
 $testSettings = $null
 ```
 
-Тесты создают и очищают свои записи в выбранной базе. Не используйте в ней реальные аккаунты. При проверке 10 октября на подготовленной отдельной схеме прошли 67/67 тестов; на пустой схеме первый параллельный запуск дал 3 ошибки миграций. Подробности — в REVIEW.
+Общая xUnit fixture сама применяет миграции один раз до всех интеграционных тестов. Запускать backend для подготовки схемы больше не нужно. Тестовые классы одной коллекции выполняются последовательно; параллельные запросы через Task.WhenAll внутри тестов сохранены. Для одновременных отдельных процессов тестирования выбирайте разные тестовые базы.
+
+Тесты создают и очищают только свои записи в выбранной базе. Не используйте в ней реальные аккаунты. На новой пустой базе и при повторном запуске прошли 79/79 тестов (67 прежних и 12 проверок безопасной настройки). Подробности — в REVIEW.
 
 ## Реализованные API
 

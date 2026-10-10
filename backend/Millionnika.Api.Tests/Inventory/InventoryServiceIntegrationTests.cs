@@ -1,4 +1,4 @@
-using System.Text.Json;
+using Millionnika.Api.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Millionnika.Api.Configuration;
@@ -10,11 +10,11 @@ using Xunit;
 
 namespace Millionnika.Api.Tests.Inventory;
 
+[Collection("PostgreSQL integration")]
 public sealed class InventoryServiceIntegrationTests
 {
     private static readonly Guid EnergyItemId = Guid.Parse("11111111-1111-1111-1111-111111111001");
     private static readonly Guid HealthItemId = Guid.Parse("11111111-1111-1111-1111-111111111003");
-    private static readonly Lazy<Task> Migration = new(ApplyMigrationsAsync);
 
     [Fact]
     public async Task Buy_AddsItemAndSubtractsCredits()
@@ -169,7 +169,6 @@ public sealed class InventoryServiceIntegrationTests
 
     private static async Task WithPlayerAsync(long credits, Func<TestPlayer, Task> test)
     {
-        await Migration.Value;
         var userId = Guid.NewGuid();
         var characterId = Guid.NewGuid();
         var suffix = userId.ToString("N")[..16];
@@ -249,32 +248,7 @@ public sealed class InventoryServiceIntegrationTests
         return new InventoryService(dbContext, new ResourceRecoveryService(options, TimeProvider.System));
     }
 
-    private static async Task ApplyMigrationsAsync()
-    {
-        await using var db = CreateDbContext();
-        await db.Database.MigrateAsync();
-    }
-
-    private static GameDbContext CreateDbContext()
-    {
-        var options = new DbContextOptionsBuilder<GameDbContext>()
-            .UseNpgsql(GetConnectionString())
-            .Options;
-        return new GameDbContext(options);
-    }
-
-    private static string GetConnectionString()
-    {
-        var fromEnvironment = Environment.GetEnvironmentVariable("ConnectionStrings__GameDatabase");
-        if (!string.IsNullOrWhiteSpace(fromEnvironment)) return fromEnvironment;
-
-        var secretsPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "Microsoft", "UserSecrets", "millionnika-api-development", "secrets.json");
-        using var document = JsonDocument.Parse(File.ReadAllText(secretsPath));
-        return document.RootElement.GetProperty("ConnectionStrings:GameDatabase").GetString()
-            ?? throw new InvalidOperationException("Строка подключения не настроена.");
-    }
+    private static GameDbContext CreateDbContext() => TestDatabase.CreateDbContext();
 
     private sealed record TestPlayer(Guid UserId, Guid CharacterId);
 }
