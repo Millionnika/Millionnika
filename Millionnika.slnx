@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/backend/">
+    <Project Path="backend/Millionnika.Api.Tests/Millionnika.Api.Tests.csproj" />
+    <Project Path="backend/Millionnika.Api/Millionnika.Api.csproj" />
+  </Folder>
+</Solution>

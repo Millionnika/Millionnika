@@ -1,0 +1,196 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Millionnika.Api.Configuration;
+using Millionnika.Api.Data;
+using Millionnika.Api.Entities;
+using Millionnika.Api.Resources;
+
+namespace Millionnika.Api.Game;
+
+public sealed class GameActionService(
+    GameDbContext dbContext,
+    IRandomSource randomSource,
+    IOptions<TrainingOptions> trainingOptions,
+    IResourceRecoveryService resourceRecovery) : IGameActionService
+{
+    private const string ContractAction = "contract";
+    private const string TrainingAction = "training";
+
+    public async Task<ContractResponse?> GetContractAsync(CancellationToken cancellationToken) =>
+        await dbContext.Contracts.AsNoTracking()
+            .Where(contract => contract.IsActive)
+            .Select(contract => new ContractResponse(
+                contract.Id, contract.Name, contract.CostNerve, contract.SuccessChance,
+                contract.RewardCredits, contract.RewardExperience))
+            .SingleOrDefaultAsync(cancellationToken);
+
+    public TrainingConfigResponse GetTrainingConfig()
+    {
+        var options = trainingOptions.Value;
+        return new TrainingConfigResponse(options.EnergyCost, options.StatGain, options.ExperienceGain);
+    }
+
+    public async Task<GameActionResult> ExecuteContractAsync(
+        Guid userId,
+        Guid requestId,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var character = await LockCharacterAsync(userId, cancellationToken);
+        resourceRecovery.Apply(character);
+        var existing = await FindExistingAsync(userId, requestId, cancellationToken);
+        if (existing is not null)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return ToResult(existing, character);
+        }
+
+        var contract = await dbContext.Contracts.SingleAsync(candidate => candidate.IsActive, cancellationToken);
+        ActionLog log;
+
+        if (!GameRules.HasEnoughResource(character.Nerve, contract.CostNerve))
+        {
+            log = CreateLog(userId, requestId, ContractAction, false,
+                "Недостаточно хладнокровия.", errorCode: "insufficient_nerve");
+        }
+        else
+        {
+            if (character.Nerve == character.MaxNerve)
+            {
+                character.LastNerveRecoveryAtUtc = resourceRecovery.UtcNow;
+            }
+
+            character.Nerve -= contract.CostNerve;
+            var succeeded = GameRules.ContractSucceeds(randomSource.NextDouble(), contract.SuccessChance);
+            if (succeeded)
+            {
+                character.Credits += contract.RewardCredits;
+                character.Experience += contract.RewardExperience;
+            }
+
+            log = CreateLog(
+                userId, requestId, ContractAction, succeeded,
+                succeeded ? "Дрон перехвачен. Награда получена." : "Дрон ушёл. Награды нет.",
+                nerveSpent: contract.CostNerve,
+                creditsAwarded: succeeded ? contract.RewardCredits : 0,
+                experienceAwarded: succeeded ? contract.RewardExperience : 0);
+        }
+
+        dbContext.ActionLogs.Add(log);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return ToResult(log, character);
+    }
+
+    public async Task<GameActionResult> TrainAsync(
+        Guid userId,
+        Guid requestId,
+        TrainingStat stat,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var character = await LockCharacterAsync(userId, cancellationToken);
+        resourceRecovery.Apply(character);
+        var existing = await FindExistingAsync(userId, requestId, cancellationToken);
+        if (existing is not null)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return ToResult(existing, character);
+        }
+
+        var options = trainingOptions.Value;
+        ActionLog log;
+
+        if (!GameRules.HasEnoughResource(character.Energy, options.EnergyCost))
+        {
+            log = CreateLog(userId, requestId, TrainingAction, false,
+                "Недостаточно энергии.", errorCode: "insufficient_energy", statName: stat.ToString());
+        }
+        else
+        {
+            if (character.Energy == character.MaxEnergy)
+            {
+                character.LastEnergyRecoveryAtUtc = resourceRecovery.UtcNow;
+            }
+
+            character.Energy -= options.EnergyCost;
+            character.Experience += options.ExperienceGain;
+            GameRules.IncreaseStat(character, stat, options.StatGain);
+
+            log = CreateLog(
+                userId, requestId, TrainingAction, true,
+                $"Тренировка завершена: {GetStatDisplayName(stat)} +{options.StatGain}.",
+                energySpent: options.EnergyCost,
+                experienceAwarded: options.ExperienceGain,
+                statName: stat.ToString(),
+                statGain: options.StatGain);
+        }
+
+        dbContext.ActionLogs.Add(log);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return ToResult(log, character);
+    }
+
+    public async Task<IReadOnlyList<ActionLogResponse>> GetRecentLogsAsync(
+        Guid userId,
+        CancellationToken cancellationToken) =>
+        await dbContext.ActionLogs.AsNoTracking()
+            .Where(log => log.UserId == userId)
+            .OrderByDescending(log => log.CreatedAtUtc)
+            .Take(10)
+            .Select(log => new ActionLogResponse(log.ActionType, log.Succeeded, log.Message, log.CreatedAtUtc))
+            .ToListAsync(cancellationToken);
+
+    private async Task<GameCharacter> LockCharacterAsync(Guid userId, CancellationToken cancellationToken) =>
+        await dbContext.Characters
+            .FromSqlInterpolated($"SELECT * FROM characters WHERE \"UserId\" = {userId} FOR UPDATE")
+            .SingleAsync(cancellationToken);
+
+    private Task<ActionLog?> FindExistingAsync(Guid userId, Guid requestId, CancellationToken cancellationToken) =>
+        dbContext.ActionLogs.AsNoTracking().SingleOrDefaultAsync(
+            log => log.UserId == userId && log.RequestId == requestId,
+            cancellationToken);
+
+    private static string GetStatDisplayName(TrainingStat stat) => stat switch
+    {
+        TrainingStat.Strength => "сила",
+        TrainingStat.Speed => "скорость",
+        TrainingStat.Defense => "защита",
+        TrainingStat.Dexterity => "ловкость",
+        _ => throw new ArgumentOutOfRangeException(nameof(stat))
+    };
+
+    private static ActionLog CreateLog(
+        Guid userId,
+        Guid requestId,
+        string actionType,
+        bool succeeded,
+        string message,
+        string? errorCode = null,
+        int energySpent = 0,
+        int nerveSpent = 0,
+        long creditsAwarded = 0,
+        long experienceAwarded = 0,
+        string? statName = null,
+        int statGain = 0) => new()
+        {
+            Id = Guid.NewGuid(), UserId = userId, RequestId = requestId,
+            ActionType = actionType, Succeeded = succeeded, ErrorCode = errorCode, Message = message,
+            EnergySpent = energySpent, NerveSpent = nerveSpent,
+            CreditsAwarded = creditsAwarded, ExperienceAwarded = experienceAwarded,
+            StatName = statName, StatGain = statGain, CreatedAtUtc = DateTimeOffset.UtcNow
+        };
+
+    private static GameActionResult ToResult(ActionLog log, GameCharacter character) => new(
+        new ActionResultResponse(
+            log.RequestId, log.Succeeded, log.Message, log.EnergySpent, log.NerveSpent,
+            log.CreditsAwarded, log.ExperienceAwarded, log.StatName, log.StatGain,
+            new PlayerStateResponse(
+                character.Credits, character.Energy, character.Nerve,
+                character.Strength, character.Speed, character.Defense, character.Dexterity,
+                character.Experience)),
+        ResourceRejected: log.ErrorCode is "insufficient_nerve" or "insufficient_energy");
+}
