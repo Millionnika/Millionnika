@@ -56,18 +56,31 @@ public sealed class GameActionService(
         }
         else
         {
-            if (character.Nerve == character.MaxNerve)
-            {
-                character.LastNerveRecoveryAtUtc = resourceRecovery.UtcNow;
-            }
-
-            character.Nerve -= contract.CostNerve;
             var succeeded = GameRules.ContractSucceeds(randomSource.NextDouble(), contract.SuccessChance);
+            var credits = character.Credits;
+            var experience = character.Experience;
             if (succeeded)
             {
-                character.Credits += contract.RewardCredits;
-                character.Experience += contract.RewardExperience;
+                if (!GameNumericLimits.TryAdd(character.Credits, contract.RewardCredits,
+                        GameNumericLimits.MaxEconomyValue, out credits) ||
+                    !GameNumericLimits.TryAdd(character.Experience, contract.RewardExperience,
+                        GameNumericLimits.MaxEconomyValue, out experience))
+                {
+                    log = CreateLog(userId, requestId, ContractAction, false,
+                        "Награда превысила допустимый числовой предел. Ресурс не списан.",
+                        errorCode: "numeric_limit");
+                    dbContext.ActionLogs.Add(log);
+                    await dbContext.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                    return ToResult(log, character);
+                }
             }
+
+            if (character.Nerve == character.MaxNerve)
+                character.LastNerveRecoveryAtUtc = resourceRecovery.UtcNow;
+            character.Nerve -= contract.CostNerve;
+            character.Credits = credits;
+            character.Experience = experience;
 
             log = CreateLog(
                 userId, requestId, ContractAction, succeeded,
@@ -110,14 +123,24 @@ public sealed class GameActionService(
         }
         else
         {
-            if (character.Energy == character.MaxEnergy)
+            if (!GameNumericLimits.TryAdd(character.Experience, options.ExperienceGain,
+                    GameNumericLimits.MaxEconomyValue, out var experience) ||
+                !GameRules.TryGetIncreasedStat(character, stat, options.StatGain, out var increasedStat))
             {
-                character.LastEnergyRecoveryAtUtc = resourceRecovery.UtcNow;
+                log = CreateLog(userId, requestId, TrainingAction, false,
+                    "Тренировка превысила допустимый числовой предел. Энергия не списана.",
+                    errorCode: "numeric_limit", statName: stat.ToString());
+                dbContext.ActionLogs.Add(log);
+                await dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return ToResult(log, character);
             }
 
+            if (character.Energy == character.MaxEnergy)
+                character.LastEnergyRecoveryAtUtc = resourceRecovery.UtcNow;
             character.Energy -= options.EnergyCost;
-            character.Experience += options.ExperienceGain;
-            GameRules.IncreaseStat(character, stat, options.StatGain);
+            character.Experience = experience;
+            GameRules.SetStat(character, stat, increasedStat);
 
             log = CreateLog(
                 userId, requestId, TrainingAction, true,
@@ -192,5 +215,5 @@ public sealed class GameActionService(
                 character.Credits, character.Energy, character.Nerve,
                 character.Strength, character.Speed, character.Defense, character.Dexterity,
                 character.Experience)),
-        ResourceRejected: log.ErrorCode is "insufficient_nerve" or "insufficient_energy");
+        ResourceRejected: log.ErrorCode is "insufficient_nerve" or "insufficient_energy" or "numeric_limit");
 }

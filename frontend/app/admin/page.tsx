@@ -14,6 +14,7 @@ type Contract = { id: string; name: string; costNerve: number; successChance: nu
 type Item = { id: string; name: string; description: string; price: number; type: string; effectResource: string; effectAmount: number; isActive: boolean };
 type ActionLog = { id: string; username: string; actionType: string; succeeded: boolean; message: string; createdAtUtc: string };
 type AuditLog = { id: string; adminUsername: string; action: string; targetType: string; targetId: string; oldValue: string; newValue: string; reason: string; createdAtUtc: string };
+const MAX_ECONOMY_VALUE = 1_000_000_000_000;
 
 export default function AdminPage() {
   const router = useRouter();
@@ -82,7 +83,7 @@ export default function AdminPage() {
           <h3>{selected.username}</h3>
           <p>Уровень {selected.level} · Опыт {selected.experience} · Сила {selected.strength} · Скорость {selected.speed} · Защита {selected.defense} · Ловкость {selected.dexterity}</p>
           <form className="admin-form" onSubmit={updateResources}>
-            <NumberField name="credits" label="Кредиты" value={selected.credits} min={0} />
+            <NumberField name="credits" label="Кредиты" value={selected.credits} min={0} max={MAX_ECONOMY_VALUE} />
             <NumberField name="energy" label={`Энергия (до ${selected.maxEnergy})`} value={selected.energy} min={0} max={selected.maxEnergy} />
             <NumberField name="nerve" label={`Хладнокровие (до ${selected.maxNerve})`} value={selected.nerve} min={0} max={selected.maxNerve} />
             <NumberField name="health" label={`Здоровье (до ${selected.maxHealth})`} value={selected.health} min={0} max={selected.maxHealth} />
@@ -95,11 +96,11 @@ export default function AdminPage() {
       </AdminSection>
 
       <AdminSection title="Контракты">{contracts.map((contract) => <form className="admin-editor admin-form" key={contract.id} onSubmit={(event) => { event.preventDefault(); const f = new FormData(event.currentTarget); void mutate(`/api/admin/contracts/${contract.id}`, { costNerve: Number(f.get("costNerve")), successChance: Number(f.get("successChance")), rewardCredits: Number(f.get("rewardCredits")), rewardExperience: Number(f.get("rewardExperience")), isActive: f.get("isActive") === "on", reason: f.get("reason") }); }}>
-        <h3>{contract.name}</h3><NumberField name="costNerve" label="Стоимость" value={contract.costNerve} min={0} /><NumberField name="successChance" label="Шанс (0–1)" value={contract.successChance} min={0} max={1} step="0.01" /><NumberField name="rewardCredits" label="Награда" value={contract.rewardCredits} min={0} /><NumberField name="rewardExperience" label="Опыт" value={contract.rewardExperience} min={0} /><CheckField name="isActive" label="Активен" checked={contract.isActive} /><ReasonField /><button className="primary-button" type="submit">Сохранить контракт</button>
+        <h3>{contract.name}</h3><NumberField name="costNerve" label="Стоимость" value={contract.costNerve} min={0} /><NumberField name="successChance" label="Шанс (0–1)" value={contract.successChance} min={0} max={1} step="0.01" /><NumberField name="rewardCredits" label="Награда" value={contract.rewardCredits} min={0} max={MAX_ECONOMY_VALUE} /><NumberField name="rewardExperience" label="Опыт" value={contract.rewardExperience} min={0} max={MAX_ECONOMY_VALUE} /><CheckField name="isActive" label="Активен" checked={contract.isActive} /><ReasonField /><button className="primary-button" type="submit">Сохранить контракт</button>
       </form>)}</AdminSection>
 
       <AdminSection title="Предметы">{items.map((item) => <form className="admin-editor admin-form" key={item.id} onSubmit={(event) => { event.preventDefault(); const f = new FormData(event.currentTarget); void mutate(`/api/admin/items/${item.id}`, { price: Number(f.get("price")), description: f.get("description"), effectResource: f.get("effectResource"), effectAmount: Number(f.get("effectAmount")), isActive: f.get("isActive") === "on", reason: f.get("reason") }); }}>
-        <h3>{item.name}</h3><NumberField name="price" label="Цена" value={item.price} min={0} /><label>Описание<textarea name="description" defaultValue={item.description} maxLength={500} required /></label><label>Ресурс<select name="effectResource" defaultValue={item.effectResource}><option value="energy">Энергия</option><option value="nerve">Хладнокровие</option><option value="health">Здоровье</option></select></label><NumberField name="effectAmount" label="Сила эффекта" value={item.effectAmount} min={1} /><CheckField name="isActive" label="Активен" checked={item.isActive} /><ReasonField /><button className="primary-button" type="submit">Сохранить предмет</button>
+        <h3>{item.name}</h3><NumberField name="price" label="Цена" value={item.price} min={0} max={MAX_ECONOMY_VALUE} /><label>Описание<textarea name="description" defaultValue={item.description} maxLength={500} required /></label><label>Ресурс<select name="effectResource" defaultValue={item.effectResource}><option value="energy">Энергия</option><option value="nerve">Хладнокровие</option><option value="health">Здоровье</option></select></label><NumberField name="effectAmount" label="Сила эффекта" value={item.effectAmount} min={1} /><CheckField name="isActive" label="Активен" checked={item.isActive} /><ReasonField /><button className="primary-button" type="submit">Сохранить предмет</button>
       </form>)}</AdminSection>
 
       <AdminSection title="Действия игроков"><LogTable rows={actions.map((log) => ({ id: log.id, date: log.createdAtUtc, title: `${log.username} · ${log.actionType}`, text: log.message }))} /></AdminSection>

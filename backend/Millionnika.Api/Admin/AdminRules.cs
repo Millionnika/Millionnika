@@ -1,5 +1,7 @@
 namespace Millionnika.Api.Admin;
 
+using Millionnika.Api.Game;
+
 public static class AdminRules
 {
     public static bool IsAdmin(string? role) =>
@@ -10,17 +12,19 @@ public static class AdminRules
 
     public static bool AreResourcesValid(
         long credits, int energy, int maxEnergy, int nerve, int maxNerve, int health, int maxHealth) =>
-        credits >= 0 &&
+        credits is >= 0 and <= GameNumericLimits.MaxEconomyValue &&
         energy >= 0 && energy <= maxEnergy &&
         nerve >= 0 && nerve <= maxNerve &&
         health >= 0 && health <= maxHealth;
 
     public static bool IsContractValid(UpdateContractRequest request) =>
         request.CostNerve >= 0 && request.SuccessChance is >= 0 and <= 1 &&
-        request.RewardCredits >= 0 && request.RewardExperience >= 0 && IsReasonValid(request.Reason);
+        request.RewardCredits is >= 0 and <= GameNumericLimits.MaxEconomyValue &&
+        request.RewardExperience is >= 0 and <= GameNumericLimits.MaxEconomyValue && IsReasonValid(request.Reason);
 
     public static bool IsItemValid(UpdateItemRequest request) =>
-        request.Price >= 0 && request.Description?.Trim().Length is >= 1 and <= 500 &&
+        request.Price is >= 0 and <= GameNumericLimits.MaxEconomyValue &&
+        request.Description?.Trim().Length is >= 1 and <= 500 &&
         request.EffectResource is "energy" or "nerve" or "health" &&
         request.EffectAmount > 0 && IsReasonValid(request.Reason);
 }

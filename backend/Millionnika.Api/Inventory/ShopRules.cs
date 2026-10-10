@@ -1,5 +1,7 @@
 namespace Millionnika.Api.Inventory;
 
+using Millionnika.Api.Game;
+
 public static class ShopRules
 {
     public const int MaxQuantityPerRequest = 100;
@@ -16,7 +18,8 @@ public static class ShopRules
     public static bool TryCalculatePrice(long unitPrice, int quantity, out long totalPrice)
     {
         totalPrice = 0;
-        if (unitPrice < 0 || !IsValidQuantity(quantity) || unitPrice > long.MaxValue / quantity)
+        if (unitPrice < 0 || unitPrice > GameNumericLimits.MaxEconomyValue ||
+            !IsValidQuantity(quantity) || unitPrice > GameNumericLimits.MaxEconomyValue / quantity)
         {
             return false;
         }

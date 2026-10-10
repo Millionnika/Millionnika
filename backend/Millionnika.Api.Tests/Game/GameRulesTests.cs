@@ -1,5 +1,6 @@
 using Millionnika.Api.Entities;
 using Millionnika.Api.Game;
+using Millionnika.Api.Configuration;
 using Xunit;
 
 namespace Millionnika.Api.Tests.Game;
@@ -58,11 +59,47 @@ public sealed class GameRulesTests
             Dexterity = 1
         };
 
-        GameRules.IncreaseStat(character, TrainingStat.Defense, 1);
+        Assert.True(GameRules.TryGetIncreasedStat(character, TrainingStat.Defense, 1, out var increased));
+        GameRules.SetStat(character, TrainingStat.Defense, increased);
 
         Assert.Equal(1, character.Strength);
         Assert.Equal(1, character.Speed);
         Assert.Equal(2, character.Defense);
         Assert.Equal(1, character.Dexterity);
+    }
+
+    [Fact]
+    public void Training_RejectsStatAboveLimitWithoutChangingCharacter()
+    {
+        var character = new GameCharacter { Strength = GameNumericLimits.MaxStatValue };
+
+        Assert.False(GameRules.TryGetIncreasedStat(character, TrainingStat.Strength, 1, out _));
+        Assert.Equal(GameNumericLimits.MaxStatValue, character.Strength);
+    }
+
+    [Fact]
+    public void EconomyAddition_AcceptsBoundaryAndRejectsOverflow()
+    {
+        Assert.True(GameNumericLimits.TryAdd(
+            GameNumericLimits.MaxEconomyValue - 1, 1, GameNumericLimits.MaxEconomyValue, out var boundary));
+        Assert.Equal(GameNumericLimits.MaxEconomyValue, boundary);
+        Assert.False(GameNumericLimits.TryAdd(
+            GameNumericLimits.MaxEconomyValue, 1, GameNumericLimits.MaxEconomyValue, out _));
+    }
+
+    [Fact]
+    public void Configuration_RejectsNumericValuesAboveLimits()
+    {
+        var defaults = new CharacterDefaultsOptions
+        {
+            Credits = GameNumericLimits.MaxEconomyValue + 1,
+            MaxEnergy = 100, Energy = 100, MaxNerve = 10, Nerve = 10,
+            MaxHealth = 100, Health = 100, Strength = 1, Speed = 1, Defense = 1, Dexterity = 1
+        };
+        Assert.False(GameNumericLimits.AreCharacterDefaultsValid(defaults));
+        Assert.False(GameNumericLimits.IsTrainingValid(new TrainingOptions
+        {
+            EnergyCost = 10, StatGain = GameNumericLimits.MaxStatValue + 1, ExperienceGain = 2
+        }));
     }
 }

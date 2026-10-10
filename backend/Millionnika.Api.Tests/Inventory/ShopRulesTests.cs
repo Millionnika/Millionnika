@@ -1,4 +1,5 @@
 using Millionnika.Api.Inventory;
+using Millionnika.Api.Game;
 using Xunit;
 
 namespace Millionnika.Api.Tests.Inventory;
@@ -45,5 +46,13 @@ public sealed class ShopRulesTests
     public void ItemEffect_DoesNotExceedMaximum()
     {
         Assert.Equal(100, ShopRules.CalculateRestoredValue(95, 100, 20, 1));
+    }
+
+    [Fact]
+    public void Purchase_RejectsTotalAboveEconomyLimit()
+    {
+        Assert.False(ShopRules.TryCalculatePrice(GameNumericLimits.MaxEconomyValue, 2, out _));
+        Assert.True(ShopRules.TryCalculatePrice(GameNumericLimits.MaxEconomyValue, 1, out var boundary));
+        Assert.Equal(GameNumericLimits.MaxEconomyValue, boundary);
     }
 }

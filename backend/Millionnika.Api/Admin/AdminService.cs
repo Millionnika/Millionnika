@@ -64,7 +64,8 @@ public sealed class AdminService(
         if (!AdminRules.AreResourcesValid(
                 request.Credits, request.Energy, character.MaxEnergy,
                 request.Nerve, character.MaxNerve, request.Health, character.MaxHealth))
-            return AdminMutationResult.Failure("Ресурсы должны быть от нуля до установленного максимума.");
+            return AdminMutationResult.Failure(
+                "Ресурсы должны быть от нуля до установленного максимума; кредиты — не более 1 триллиона.");
 
         var oldValue = Resources(character);
         var now = resourceRecovery.UtcNow;
@@ -91,7 +92,8 @@ public sealed class AdminService(
     public async Task<AdminMutationResult> UpdateContractAsync(
         Guid adminId, Guid contractId, UpdateContractRequest request, CancellationToken cancellationToken)
     {
-        if (!AdminRules.IsContractValid(request)) return AdminMutationResult.Failure("Проверьте параметры контракта и причину.");
+        if (!AdminRules.IsContractValid(request))
+            return AdminMutationResult.Failure("Проверьте параметры контракта: награды не могут превышать 1 триллион.");
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var contract = await dbContext.Contracts
             .FromSqlInterpolated($"SELECT * FROM contracts WHERE \"Id\" = {contractId} FOR UPDATE")
@@ -121,7 +123,8 @@ public sealed class AdminService(
     public async Task<AdminMutationResult> UpdateItemAsync(
         Guid adminId, Guid itemId, UpdateItemRequest request, CancellationToken cancellationToken)
     {
-        if (!AdminRules.IsItemValid(request)) return AdminMutationResult.Failure("Проверьте параметры предмета и причину.");
+        if (!AdminRules.IsItemValid(request))
+            return AdminMutationResult.Failure("Проверьте параметры предмета: цена не может превышать 1 триллион.");
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var item = await dbContext.Items
             .FromSqlInterpolated($"SELECT * FROM items WHERE \"Id\" = {itemId} FOR UPDATE")

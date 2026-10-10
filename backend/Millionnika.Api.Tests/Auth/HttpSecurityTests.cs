@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Millionnika.Api.Data;
+using Millionnika.Api.Game;
 using Millionnika.Api.Tests.Infrastructure;
 using Xunit;
 
@@ -313,6 +314,62 @@ public sealed class HttpSecurityTests : IAsyncLifetime
         {
             using var response = await SendAsync(client, "/api/auth/register/", new { }, forwarded: $"192.0.2.{i + 1}");
             Assert.Equal(i < 2 ? HttpStatusCode.BadRequest : HttpStatusCode.TooManyRequests, response.StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task NumericLimit_ReturnsConflictAndRollsBackWholeContract()
+    {
+        await StartAsync();
+        var client = Browser();
+        var account = await RegisterAsync(client);
+        Guid contractId;
+        int oldCost;
+        decimal oldChance;
+        long oldCredits;
+        long oldExperience;
+        bool oldActive;
+        await using (var setup = TestDatabase.CreateDbContext())
+        {
+            await setup.Characters.Where(value => value.UserId == account.Id)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(value => value.Credits, GameNumericLimits.MaxEconomyValue)
+                    .SetProperty(value => value.Experience, 20));
+            var contract = await setup.Contracts.SingleAsync();
+            contractId = contract.Id;
+            (oldCost, oldChance, oldCredits, oldExperience, oldActive) =
+                (contract.CostNerve, contract.SuccessChance, contract.RewardCredits, contract.RewardExperience, contract.IsActive);
+            contract.CostNerve = 2;
+            contract.SuccessChance = 1;
+            contract.RewardCredits = 1;
+            contract.RewardExperience = 5;
+            contract.IsActive = true;
+            await setup.SaveChangesAsync();
+        }
+
+        try
+        {
+            using var response = await SendAsync(client, "/api/game/contract/execute", new { requestId = Guid.NewGuid() });
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.False(body.GetProperty("succeeded").GetBoolean());
+            Assert.Contains("предел", body.GetProperty("message").GetString(), StringComparison.OrdinalIgnoreCase);
+
+            await using var verify = TestDatabase.CreateDbContext();
+            var character = await verify.Characters.AsNoTracking().SingleAsync(value => value.UserId == account.Id);
+            Assert.Equal(GameNumericLimits.MaxEconomyValue, character.Credits);
+            Assert.Equal(20, character.Experience);
+            Assert.Equal(10, character.Nerve);
+        }
+        finally
+        {
+            await using var restore = TestDatabase.CreateDbContext();
+            await restore.Contracts.Where(value => value.Id == contractId).ExecuteUpdateAsync(setters => setters
+                .SetProperty(value => value.CostNerve, oldCost)
+                .SetProperty(value => value.SuccessChance, oldChance)
+                .SetProperty(value => value.RewardCredits, oldCredits)
+                .SetProperty(value => value.RewardExperience, oldExperience)
+                .SetProperty(value => value.IsActive, oldActive));
         }
     }
 

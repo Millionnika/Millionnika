@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Millionnika.Api.Entities;
+using Millionnika.Api.Game;
 
 namespace Millionnika.Api.Data;
 
@@ -46,14 +47,22 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
 
         modelBuilder.Entity<GameCharacter>(entity =>
         {
-            entity.ToTable("characters");
+            entity.ToTable("characters", table =>
+            {
+                table.HasCheckConstraint("CK_characters_Credits", $"\"Credits\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
+                table.HasCheckConstraint("CK_characters_Experience", $"\"Experience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
+                table.HasCheckConstraint("CK_characters_Stats", $"\"Strength\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue} AND \"Speed\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue} AND \"Defense\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue} AND \"Dexterity\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue}");
+            });
             entity.HasKey(character => character.Id);
             entity.HasIndex(character => character.UserId).IsUnique();
         });
 
         modelBuilder.Entity<Contract>(entity =>
         {
-            entity.ToTable("contracts");
+            entity.ToTable("contracts", table =>
+            {
+                table.HasCheckConstraint("CK_contracts_NumericLimits", $"\"CostNerve\" >= 0 AND \"SuccessChance\" BETWEEN 0 AND 1 AND \"RewardCredits\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"RewardExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
+            });
             entity.HasKey(contract => contract.Id);
             entity.Property(contract => contract.Name).HasMaxLength(120).IsRequired();
             entity.Property(contract => contract.SuccessChance).HasPrecision(5, 4);
@@ -61,7 +70,11 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
 
         modelBuilder.Entity<ActionLog>(entity =>
         {
-            entity.ToTable("action_logs");
+            entity.ToTable("action_logs", table =>
+            {
+                table.HasCheckConstraint("CK_action_logs_Economy", $"\"CreditsAwarded\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"ExperienceAwarded\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"CreditsSpent\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
+                table.HasCheckConstraint("CK_action_logs_StatGain", $"\"StatGain\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue}");
+            });
             entity.HasKey(log => log.Id);
             entity.Property(log => log.ActionType).HasMaxLength(32).IsRequired();
             entity.Property(log => log.Message).HasMaxLength(240).IsRequired();
@@ -78,7 +91,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
         {
             entity.ToTable("items", table =>
             {
-                table.HasCheckConstraint("CK_items_Price", "\"Price\" >= 0");
+                table.HasCheckConstraint("CK_items_Price", $"\"Price\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
                 table.HasCheckConstraint("CK_items_EffectAmount", "\"EffectAmount\" > 0");
             });
             entity.HasKey(item => item.Id);

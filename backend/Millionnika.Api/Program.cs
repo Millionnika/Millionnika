@@ -19,10 +19,16 @@ using Npgsql;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSingleton<IDatabaseHealthService, PostgreSqlHealthService>();
-builder.Services.Configure<CharacterDefaultsOptions>(
-    builder.Configuration.GetSection(CharacterDefaultsOptions.SectionName));
-builder.Services.Configure<TrainingOptions>(
-    builder.Configuration.GetSection(TrainingOptions.SectionName));
+builder.Services.AddOptions<CharacterDefaultsOptions>()
+    .BindConfiguration(CharacterDefaultsOptions.SectionName)
+    .Validate(GameNumericLimits.AreCharacterDefaultsValid,
+        "CharacterDefaults contains values outside the supported numeric limits.")
+    .ValidateOnStart();
+builder.Services.AddOptions<TrainingOptions>()
+    .BindConfiguration(TrainingOptions.SectionName)
+    .Validate(GameNumericLimits.IsTrainingValid,
+        "Training contains values outside the supported numeric limits.")
+    .ValidateOnStart();
 builder.Services.Configure<ResourceRecoveryOptions>(
     builder.Configuration.GetSection(ResourceRecoveryOptions.SectionName));
 builder.Services.AddDbContext<GameDbContext>(options =>

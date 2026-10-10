@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Millionnika.Api.Admin;
+using Millionnika.Api.Game;
 using Xunit;
 
 namespace Millionnika.Api.Tests.Admin;
@@ -41,6 +42,23 @@ public sealed class AdminAuthorizationTests
     public void AuditReason_RejectsMissingOrShortValue(string? reason)
     {
         Assert.False(AdminRules.IsReasonValid(reason));
+    }
+
+    [Fact]
+    public void AdminValues_AcceptBoundaryAndRejectValuesAboveIt()
+    {
+        Assert.True(AdminRules.AreResourcesValid(GameNumericLimits.MaxEconomyValue, 1, 1, 1, 1, 1, 1));
+        Assert.False(AdminRules.AreResourcesValid(GameNumericLimits.MaxEconomyValue + 1, 1, 1, 1, 1, 1, 1));
+
+        Assert.True(AdminRules.IsContractValid(new UpdateContractRequest(
+            1, 1, GameNumericLimits.MaxEconomyValue, GameNumericLimits.MaxEconomyValue, true, "Предел")));
+        Assert.False(AdminRules.IsContractValid(new UpdateContractRequest(
+            1, 1, GameNumericLimits.MaxEconomyValue + 1, 1, true, "Выше предела")));
+
+        Assert.True(AdminRules.IsItemValid(new UpdateItemRequest(
+            GameNumericLimits.MaxEconomyValue, "Описание", "energy", 1, true, "Предел")));
+        Assert.False(AdminRules.IsItemValid(new UpdateItemRequest(
+            GameNumericLimits.MaxEconomyValue + 1, "Описание", "energy", 1, true, "Выше предела")));
     }
 
     private static ClaimsPrincipal PrincipalWithRole(string role) =>

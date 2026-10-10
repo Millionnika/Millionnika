@@ -21,19 +21,30 @@ public static class GameRules
     public static bool HasEnoughResource(int current, int cost) =>
         cost > 0 && current >= cost;
 
-    public static void IncreaseStat(GameCharacter character, TrainingStat stat, int amount)
+    public static bool TryGetIncreasedStat(
+        GameCharacter character, TrainingStat stat, int amount, out int increased)
     {
-        if (amount <= 0)
+        var current = stat switch
         {
-            throw new ArgumentOutOfRangeException(nameof(amount));
-        }
+            TrainingStat.Strength => character.Strength,
+            TrainingStat.Speed => character.Speed,
+            TrainingStat.Defense => character.Defense,
+            TrainingStat.Dexterity => character.Dexterity,
+            _ => throw new ArgumentOutOfRangeException(nameof(stat))
+        };
+        increased = current;
+        return amount > 0 && GameNumericLimits.TryAdd(
+            current, amount, GameNumericLimits.MaxStatValue, out increased);
+    }
 
+    public static void SetStat(GameCharacter character, TrainingStat stat, int value)
+    {
         switch (stat)
         {
-            case TrainingStat.Strength: character.Strength += amount; break;
-            case TrainingStat.Speed: character.Speed += amount; break;
-            case TrainingStat.Defense: character.Defense += amount; break;
-            case TrainingStat.Dexterity: character.Dexterity += amount; break;
+            case TrainingStat.Strength: character.Strength = value; break;
+            case TrainingStat.Speed: character.Speed = value; break;
+            case TrainingStat.Defense: character.Defense = value; break;
+            case TrainingStat.Dexterity: character.Dexterity = value; break;
             default: throw new ArgumentOutOfRangeException(nameof(stat));
         }
     }
