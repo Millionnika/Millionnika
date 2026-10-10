@@ -4,6 +4,7 @@ public interface IGameActionService
 {
     Task<ContractResponse?> GetContractAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<ContractResponse>> GetContractsAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<ContractResponse>> GetContractsAsync(Guid userId, string direction, CancellationToken cancellationToken);
     TrainingConfigResponse GetTrainingConfig();
     Task<GameActionResult> ExecuteContractAsync(Guid userId, Guid requestId, CancellationToken cancellationToken);
     Task<GameActionResult> ExecuteContractAsync(Guid userId, Guid requestId, Guid contractId, CancellationToken cancellationToken);

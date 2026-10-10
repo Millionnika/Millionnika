@@ -70,6 +70,19 @@ public sealed class AdminAuthorizationTests
             cost, 0.8m, 50, 10, true, "Проверка стоимости")));
     }
 
+    [Fact]
+    public void ContractProgression_ValidatesDirectionLevelsAndSpecialExperience()
+    {
+        Assert.True(AdminRules.IsContractValid(new UpdateContractRequest(
+            1, .8m, 10, 5, true, "Проверка", Direction: ContractDirections.Hacking,
+            MinimumLevel: 1, MinimumHackingLevel: 3, RewardHackingExperience: 20)));
+        Assert.False(AdminRules.IsContractValid(new UpdateContractRequest(
+            1, .8m, 10, 5, true, "Проверка", Direction: ContractDirections.Normal,
+            MinimumLevel: 1, MinimumHackingLevel: 2, RewardHackingExperience: 20)));
+        Assert.False(AdminRules.IsContractValid(new UpdateContractRequest(
+            1, .8m, 10, 5, true, "Проверка", Direction: "unknown")));
+    }
+
     private static ClaimsPrincipal PrincipalWithRole(string role) =>
         new(new ClaimsIdentity([new Claim(ClaimTypes.Role, role)], "test"));
 }

@@ -30,6 +30,11 @@ builder.Services.AddOptions<TrainingOptions>()
     .Validate(GameNumericLimits.IsTrainingValid,
         "Training contains values outside the supported numeric limits.")
     .ValidateOnStart();
+builder.Services.AddOptions<ProgressionOptions>()
+    .BindConfiguration(ProgressionOptions.SectionName)
+    .Validate(ProgressionService.IsValid,
+        "Progression thresholds and hacking chance settings are invalid.")
+    .ValidateOnStart();
 builder.Services.Configure<ResourceRecoveryOptions>(
     builder.Configuration.GetSection(ResourceRecoveryOptions.SectionName));
 builder.Services.AddDbContext<GameDbContext>(options =>
@@ -56,6 +61,7 @@ builder.Services.AddAntiforgery(options =>
 });
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddScoped<IGameActionService, GameActionService>();
+builder.Services.AddSingleton<IProgressionService, ProgressionService>();
 builder.Services.AddSingleton<IRandomSource, RandomSource>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IResourceRecoveryService, ResourceRecoveryService>();

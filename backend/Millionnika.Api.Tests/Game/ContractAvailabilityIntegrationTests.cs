@@ -230,7 +230,7 @@ public sealed class ContractAvailabilityIntegrationTests
         new ResourceRecoveryService(Options.Create(new ResourceRecoveryOptions
         {
             EnergyAmount = 5, EnergyIntervalMinutes = 15, NerveAmount = 1, NerveIntervalMinutes = 5
-        }), TimeProvider.System));
+        }), TimeProvider.System), TestProgression.Create());
 
     private sealed record Player(Guid UserId, Guid CharacterId);
     private sealed record ContractValues(

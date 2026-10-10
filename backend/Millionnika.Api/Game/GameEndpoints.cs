@@ -30,9 +30,20 @@ public static class GameEndpoints
         Results.Ok(service.GetTrainingConfig());
 
     private static async Task<IResult> GetContractsAsync(
+        ClaimsPrincipal principal,
+        string? direction,
         IGameActionService service,
-        CancellationToken cancellationToken) =>
-        Results.Ok(await service.GetContractsAsync(cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        var selectedDirection = direction ?? ContractDirections.Normal;
+        if (!ContractDirections.IsValid(selectedDirection))
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["direction"] = ["Разрешены только normal или hacking."]
+            });
+        return Results.Ok(await service.GetContractsAsync(
+            GetUserId(principal), selectedDirection, cancellationToken));
+    }
 
     private static async Task<IResult> ExecuteContractAsync(
         ActionRequest request,

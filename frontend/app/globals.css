@@ -783,8 +783,16 @@ a {
 .contract-card h2 { margin: 0 0 8px; font-size: 1.1rem; }
 .contract-card p { margin: 0; color: var(--muted); line-height: 1.5; }
 
+.contract-card.locked { opacity: 0.72; }
+.contract-lock { color: var(--pink) !important; font-weight: 700; }
+.progress-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.progress-card { display: grid; gap: 8px; margin: 18px 0; padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: rgba(7, 11, 25, 0.52); }
+.progress-card span { color: var(--muted); }
+.progress-card progress { width: 100%; accent-color: var(--cyan); }
+
 @media (max-width: 650px) {
   .contract-grid { grid-template-columns: 1fr; }
+  .progress-grid { grid-template-columns: 1fr; }
   .game-nav { gap: 6px 12px; }
 }
 

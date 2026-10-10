@@ -1,3 +1,5 @@
+using Millionnika.Api.Game;
+
 namespace Millionnika.Api.Auth;
 
 public sealed record RegisterRequest(string? Username, string? Email, string? Password);
@@ -17,7 +19,9 @@ public sealed record ProfileResponse(
     int Speed,
     int Defense,
     int Dexterity,
-    long Experience);
+    long Experience,
+    ProgressionState GeneralProgress,
+    ProgressionState HackingProgress);
 
 public sealed record ResourceValue(
     int Current,

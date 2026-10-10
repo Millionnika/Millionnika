@@ -88,7 +88,8 @@ public sealed class AdminService(
         await dbContext.Contracts.AsNoTracking().OrderBy(contract => contract.Name)
             .Select(contract => new AdminContractResponse(
                 contract.Id, contract.Name, contract.Description, contract.CostNerve, contract.SuccessChance,
-                contract.RewardCredits, contract.RewardExperience, contract.IsActive))
+                contract.RewardCredits, contract.RewardExperience, contract.IsActive, contract.Direction,
+                contract.MinimumLevel, contract.MinimumHackingLevel, contract.RewardHackingExperience))
             .ToListAsync(cancellationToken);
 
     public async Task<AdminMutationResult> CreateContractAsync(
@@ -107,6 +108,10 @@ public sealed class AdminService(
             SuccessChance = request.SuccessChance,
             RewardCredits = request.RewardCredits,
             RewardExperience = request.RewardExperience,
+            Direction = request.Direction,
+            MinimumLevel = request.MinimumLevel,
+            MinimumHackingLevel = request.MinimumHackingLevel,
+            RewardHackingExperience = request.RewardHackingExperience,
             CooldownSeconds = 0,
             IsActive = request.IsActive
         };
@@ -136,6 +141,10 @@ public sealed class AdminService(
         contract.SuccessChance = request.SuccessChance;
         contract.RewardCredits = request.RewardCredits;
         contract.RewardExperience = request.RewardExperience;
+        contract.Direction = request.Direction;
+        contract.MinimumLevel = request.MinimumLevel;
+        contract.MinimumHackingLevel = request.MinimumHackingLevel;
+        contract.RewardHackingExperience = request.RewardHackingExperience;
         contract.IsActive = request.IsActive;
         AddAudit(adminId, "contract_update", "contract", contractId.ToString(), oldValue,
             ContractValues(contract), request.Reason!);
@@ -208,7 +217,8 @@ public sealed class AdminService(
     private static object ContractValues(Contract contract) => new
     {
         contract.Name, contract.Description, contract.CostNerve, contract.SuccessChance, contract.RewardCredits,
-        contract.RewardExperience, contract.IsActive
+        contract.RewardExperience, contract.Direction, contract.MinimumLevel, contract.MinimumHackingLevel,
+        contract.RewardHackingExperience, contract.IsActive
     };
 
     private static AdminMutationResult InvalidContract() =>

@@ -3,6 +3,7 @@ import Link from "next/link";
 const links = [
   ["/profile", "Профиль"],
   ["/contracts", "Контракты"],
+  ["/hacking", "Взлом"],
   ["/implant-center", "Тренировка"],
   ["/shop", "Магазин"],
   ["/inventory", "Инвентарь"],

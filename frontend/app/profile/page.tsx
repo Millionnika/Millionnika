@@ -25,7 +25,11 @@ type Profile = {
   defense: number;
   dexterity: number;
   experience: number;
+  generalProgress: Progress;
+  hackingProgress: Progress;
 };
+
+type Progress = { level: number; experience: number; currentLevelThreshold: number; nextLevelThreshold: number | null; isMaximum: boolean };
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -117,6 +121,12 @@ export default function ProfilePage() {
           />
         </section>
 
+        <h2 className="section-title">Прогресс</h2>
+        <section className="progress-grid" aria-label="Прогресс персонажа">
+          <ProgressCard title="Общий уровень" progress={profile.generalProgress} />
+          <ProgressCard title="Взлом" progress={profile.hackingProgress} />
+        </section>
+
         <h2 className="section-title">Характеристики</h2>
         <section className="stats-grid" aria-label="Характеристики">
           <Stat title="Сила" value={profile.strength} />
@@ -127,6 +137,7 @@ export default function ProfilePage() {
 
         <nav className="game-navigation" aria-label="Игровые действия">
           <Link className="primary-button" href="/contracts">Контракты</Link>
+          <Link className="secondary-button" href="/hacking">Взлом</Link>
           <Link className="secondary-button" href="/implant-center">Имплант-центр</Link>
           <Link className="secondary-button" href="/shop">Магазин</Link>
           <Link className="secondary-button" href="/inventory">Инвентарь</Link>
@@ -139,6 +150,13 @@ export default function ProfilePage() {
       </section>
     </main>
   );
+}
+
+function ProgressCard({ title, progress }: Readonly<{ title: string; progress: Progress }>) {
+  if (progress.isMaximum) return <article className="progress-card"><strong>{title}: {progress.level}</strong><span>Максимальный уровень · всего опыта {progress.experience}</span></article>;
+  const gained = progress.experience - progress.currentLevelThreshold;
+  const required = progress.nextLevelThreshold! - progress.currentLevelThreshold;
+  return <article className="progress-card"><strong>{title}: {progress.level}</strong><span>{gained} / {required} до следующего уровня</span><progress value={gained} max={required} /></article>;
 }
 
 function ResourceCard({

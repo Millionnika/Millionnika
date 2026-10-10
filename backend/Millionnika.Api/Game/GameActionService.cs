@@ -11,7 +11,8 @@ public sealed class GameActionService(
     GameDbContext dbContext,
     IRandomSource randomSource,
     IOptions<TrainingOptions> trainingOptions,
-    IResourceRecoveryService resourceRecovery) : IGameActionService
+    IResourceRecoveryService resourceRecovery,
+    IProgressionService progression) : IGameActionService
 {
     private const string ContractAction = "contract";
     private const string TrainingAction = "training";
@@ -19,21 +20,40 @@ public sealed class GameActionService(
 
     public Task<ContractResponse?> GetContractAsync(CancellationToken cancellationToken) =>
         dbContext.Contracts.AsNoTracking()
-            .Where(contract => contract.IsActive && contract.CostNerve > 0)
+            .Where(contract => contract.IsActive && contract.CostNerve > 0 && contract.Direction == ContractDirections.Normal)
             .OrderBy(contract => contract.Name).ThenBy(contract => contract.Id)
-            .Select(contract => new ContractResponse(
-                contract.Id, contract.Name, contract.Description, contract.CostNerve, contract.SuccessChance,
-                contract.RewardCredits, contract.RewardExperience))
+            .Select(contract => new ContractResponse(contract.Id, contract.Name, contract.Description,
+                contract.CostNerve, contract.SuccessChance, contract.RewardCredits, contract.RewardExperience,
+                contract.Direction, contract.MinimumLevel, contract.MinimumHackingLevel,
+                contract.RewardHackingExperience, true, null))
             .FirstOrDefaultAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<ContractResponse>> GetContractsAsync(CancellationToken cancellationToken) =>
-        await dbContext.Contracts.AsNoTracking()
-            .Where(contract => contract.IsActive && contract.CostNerve > 0)
-            .OrderBy(contract => contract.Name).ThenBy(contract => contract.Id)
-            .Select(contract => new ContractResponse(
-                contract.Id, contract.Name, contract.Description, contract.CostNerve, contract.SuccessChance,
-                contract.RewardCredits, contract.RewardExperience))
+    public Task<IReadOnlyList<ContractResponse>> GetContractsAsync(CancellationToken cancellationToken) =>
+        GetContractsCoreAsync(null, ContractDirections.Normal, cancellationToken);
+
+    public async Task<IReadOnlyList<ContractResponse>> GetContractsAsync(
+        Guid userId, string direction, CancellationToken cancellationToken)
+    {
+        if (!ContractDirections.IsValid(direction))
+            return [];
+        return await GetContractsCoreAsync(userId, direction, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<ContractResponse>> GetContractsCoreAsync(
+        Guid? userId, string direction, CancellationToken cancellationToken)
+    {
+        var state = userId.HasValue
+            ? await dbContext.Characters.AsNoTracking().Where(value => value.UserId == userId)
+                .Select(value => new { value.Level, value.HackingLevel }).SingleAsync(cancellationToken)
+            : null;
+        var contracts = await dbContext.Contracts.AsNoTracking()
+            .Where(contract => contract.IsActive && contract.CostNerve > 0 && contract.Direction == direction)
+            .OrderBy(contract => contract.MinimumHackingLevel).ThenBy(contract => contract.MinimumLevel)
+            .ThenBy(contract => contract.Name).ThenBy(contract => contract.Id)
             .ToListAsync(cancellationToken);
+        return contracts.Select(contract => ToContractResponse(contract,
+            state?.Level ?? 1, state?.HackingLevel ?? 1)).ToList();
+    }
 
     public TrainingConfigResponse GetTrainingConfig()
     {
@@ -85,6 +105,11 @@ public sealed class GameActionService(
             log = CreateLog(userId, requestId, ContractAction, signature, false,
                 "Контракт сейчас недоступен. Ресурсы не списаны.", errorCode: "contract_unavailable");
         }
+        else if (GetLockReason(contract, character) is { } lockReason)
+        {
+            log = CreateLog(userId, requestId, ContractAction, signature, false,
+                $"{lockReason}. Ресурсы не списаны.", errorCode: "contract_locked");
+        }
         else if (!GameRules.HasEnoughResource(character.Nerve, contract.CostNerve))
         {
             log = CreateLog(userId, requestId, ContractAction, signature, false,
@@ -92,15 +117,19 @@ public sealed class GameActionService(
         }
         else
         {
-            var succeeded = GameRules.ContractSucceeds(randomSource.NextDouble(), contract.SuccessChance);
+            var succeeded = GameRules.ContractSucceeds(randomSource.NextDouble(),
+                progression.GetContractChance(contract, character.HackingLevel));
             var credits = character.Credits;
             var experience = character.Experience;
+            var hackingExperience = character.HackingExperience;
             if (succeeded)
             {
                 if (!GameNumericLimits.TryAdd(character.Credits, contract.RewardCredits,
                         GameNumericLimits.MaxEconomyValue, out credits) ||
                     !GameNumericLimits.TryAdd(character.Experience, contract.RewardExperience,
-                        GameNumericLimits.MaxEconomyValue, out experience))
+                        GameNumericLimits.MaxEconomyValue, out experience) ||
+                    !GameNumericLimits.TryAdd(character.HackingExperience, contract.RewardHackingExperience,
+                        GameNumericLimits.MaxEconomyValue, out hackingExperience))
                 {
                     log = CreateLog(userId, requestId, ContractAction, signature, false,
                         "Награда превысила допустимый числовой предел. Ресурс не списан.",
@@ -117,13 +146,16 @@ public sealed class GameActionService(
             character.Nerve -= contract.CostNerve;
             character.Credits = credits;
             character.Experience = experience;
+            character.HackingExperience = hackingExperience;
+            var levelChange = progression.Apply(character);
 
             log = CreateLog(
                 userId, requestId, ContractAction, signature, succeeded,
-                succeeded ? "Дрон перехвачен. Награда получена." : "Дрон ушёл. Награды нет.",
+                succeeded ? BuildSuccessMessage(contract, levelChange) : "Задание провалено. Награды нет.",
                 nerveSpent: contract.CostNerve,
                 creditsAwarded: succeeded ? contract.RewardCredits : 0,
-                experienceAwarded: succeeded ? contract.RewardExperience : 0);
+                experienceAwarded: succeeded ? contract.RewardExperience : 0,
+                hackingExperienceAwarded: succeeded ? contract.RewardHackingExperience : 0);
         }
 
         dbContext.ActionLogs.Add(log);
@@ -181,10 +213,12 @@ public sealed class GameActionService(
             character.Energy -= options.EnergyCost;
             character.Experience = experience;
             GameRules.SetStat(character, stat, increasedStat);
+            var levelChange = progression.Apply(character);
 
             log = CreateLog(
                 userId, requestId, TrainingAction, signature, true,
-                $"Тренировка завершена: {GetStatDisplayName(stat)} +{options.StatGain}.",
+                $"Тренировка завершена: {GetStatDisplayName(stat)} +{options.StatGain}." +
+                    (levelChange.Level > levelChange.PreviousLevel ? $" Общий уровень повышен до {levelChange.Level}." : string.Empty),
                 energySpent: options.EnergyCost,
                 experienceAwarded: options.ExperienceGain,
                 statName: stat.ToString(),
@@ -238,6 +272,7 @@ public sealed class GameActionService(
         int nerveSpent = 0,
         long creditsAwarded = 0,
         long experienceAwarded = 0,
+        long hackingExperienceAwarded = 0,
         string? statName = null,
         int statGain = 0) => new()
         {
@@ -246,28 +281,69 @@ public sealed class GameActionService(
             Succeeded = succeeded, ErrorCode = errorCode, Message = message,
             EnergySpent = energySpent, NerveSpent = nerveSpent,
             CreditsAwarded = creditsAwarded, ExperienceAwarded = experienceAwarded,
+            HackingExperienceAwarded = hackingExperienceAwarded,
             StatName = statName, StatGain = statGain, CreatedAtUtc = DateTimeOffset.UtcNow
         };
 
     private static GameActionResult ToResult(ActionLog log, GameCharacter character, bool replayed = false) => new(
         new ActionResultResponse(
             log.RequestId, replayed, log.Succeeded, log.Message, log.EnergySpent, log.NerveSpent,
-            log.CreditsAwarded, log.ExperienceAwarded, log.StatName, log.StatGain,
+            log.CreditsAwarded, log.ExperienceAwarded, log.HackingExperienceAwarded,
+            log.StatName, log.StatGain,
             new PlayerStateResponse(
                 character.Credits, character.Energy, character.Nerve,
                 character.Strength, character.Speed, character.Defense, character.Dexterity,
-                character.Experience)),
+                character.Experience, character.Level, character.HackingExperience, character.HackingLevel)),
         ResourceRejected: log.ErrorCode is "insufficient_nerve" or "insufficient_energy" or
-            "numeric_limit" or "contract_unavailable");
+            "numeric_limit" or "contract_unavailable" or "contract_locked");
 
     private static GameActionResult RequestConflict(Guid requestId, GameCharacter character) => new(
         new ActionResultResponse(
             requestId, false, false,
             "Этот requestId уже использован для другого действия или других параметров.",
-            0, 0, 0, 0, null, 0,
+            0, 0, 0, 0, 0, null, 0,
             new PlayerStateResponse(
                 character.Credits, character.Energy, character.Nerve,
                 character.Strength, character.Speed, character.Defense, character.Dexterity,
-                character.Experience)),
+                character.Experience, character.Level, character.HackingExperience, character.HackingLevel)),
         ResourceRejected: true);
+
+    private ContractResponse ToContractResponse(Contract contract, int level, int hackingLevel)
+    {
+        var lockReason = GetLockReason(contract, level, hackingLevel);
+        return new ContractResponse(contract.Id, contract.Name, contract.Description, contract.CostNerve,
+            progression.GetContractChance(contract, hackingLevel), contract.RewardCredits,
+            contract.RewardExperience, contract.Direction, contract.MinimumLevel,
+            contract.MinimumHackingLevel, contract.RewardHackingExperience, lockReason is null, lockReason);
+    }
+
+    private static string? GetLockReason(Contract contract, GameCharacter character) =>
+        GetLockReason(contract, character.Level, character.HackingLevel);
+
+    private static string? GetLockReason(Contract contract, int level, int hackingLevel)
+    {
+        var needsLevel = level < contract.MinimumLevel;
+        var needsHacking = ContractDirections.IsHacking(contract.Direction) &&
+            hackingLevel < contract.MinimumHackingLevel;
+        if (ContractDirections.IsHacking(contract.Direction) && !needsLevel && needsHacking)
+            return $"Откроется на уровне Взлома {contract.MinimumHackingLevel}";
+        if (needsLevel && needsHacking)
+            return $"Нужен общий уровень {contract.MinimumLevel} и Взлом {contract.MinimumHackingLevel}";
+        if (needsLevel)
+            return $"Нужен общий уровень {contract.MinimumLevel}";
+        return needsHacking ? $"Нужен Взлом {contract.MinimumHackingLevel}" : null;
+    }
+
+    private static string BuildSuccessMessage(Contract contract, LevelChange change)
+    {
+        var message = $"Задание выполнено: +{contract.RewardExperience} общего опыта";
+        if (contract.RewardHackingExperience > 0)
+            message += $", +{contract.RewardHackingExperience} опыта Взлома";
+        message += ".";
+        if (change.Level > change.PreviousLevel)
+            message += $" Общий уровень повышен до {change.Level}.";
+        if (change.HackingLevel > change.PreviousHackingLevel)
+            message += $" Взлом повышен до уровня {change.HackingLevel}.";
+        return message;
+    }
 }

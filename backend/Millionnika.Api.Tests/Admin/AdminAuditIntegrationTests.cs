@@ -7,6 +7,7 @@ using Millionnika.Api.Configuration;
 using Millionnika.Api.Data;
 using Millionnika.Api.Entities;
 using Millionnika.Api.Resources;
+using Millionnika.Api.Game;
 using Xunit;
 
 namespace Millionnika.Api.Tests.Admin;
@@ -107,13 +108,18 @@ public sealed class AdminAuditIntegrationTests
             await using var db = CreateDbContext();
             var service = CreateService(db);
             var result = await service.CreateContractAsync(admin.Id,
-                new CreateContractRequest("Тестовый контракт", "Юмор из тестовой базы.", 2, .5m, 10, 3, true, "Тест создания"), default);
+                new CreateContractRequest("Тестовый контракт", "Юмор из тестовой базы.", 2, .5m, 10, 3, true,
+                    "Тест создания", ContractDirections.Hacking, 1, 4, 7), default);
             Assert.True(result.Succeeded);
             await using var verify = CreateDbContext();
             var contract = await verify.Contracts.SingleAsync(value => value.Name == "Тестовый контракт");
             var audit = await verify.AdminAuditLogs.SingleAsync(value => value.TargetId == contract.Id.ToString());
             Assert.Equal("contract_create", audit.Action);
+            Assert.Equal(ContractDirections.Hacking, contract.Direction);
+            Assert.Equal(4, contract.MinimumHackingLevel);
+            Assert.Equal(7, contract.RewardHackingExperience);
             Assert.Contains("Юмор из тестовой базы", audit.NewValue);
+            Assert.Contains("RewardHackingExperience", audit.NewValue);
             Assert.DoesNotContain("Password", audit.NewValue, StringComparison.OrdinalIgnoreCase);
         }
         finally

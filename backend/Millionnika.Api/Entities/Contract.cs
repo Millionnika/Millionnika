@@ -1,3 +1,5 @@
+using Millionnika.Api.Game;
+
 namespace Millionnika.Api.Entities;
 
 public sealed class Contract
@@ -9,6 +11,10 @@ public sealed class Contract
     public decimal SuccessChance { get; set; }
     public long RewardCredits { get; set; }
     public long RewardExperience { get; set; }
+    public string Direction { get; set; } = ContractDirections.Normal;
+    public int MinimumLevel { get; set; } = 1;
+    public int MinimumHackingLevel { get; set; } = 1;
+    public long RewardHackingExperience { get; set; }
     public int CooldownSeconds { get; set; }
     public bool IsActive { get; set; }
 }

@@ -203,7 +203,7 @@ public sealed class NumericLimitsIntegrationTests
         db,
         new FixedRandom(),
         Options.Create(new TrainingOptions { EnergyCost = 10, StatGain = 1, ExperienceGain = 2 }),
-        CreateRecovery());
+        CreateRecovery(), TestProgression.Create());
 
     private static InventoryService CreateInventoryService(GameDbContext db) => new(db, CreateRecovery());
 

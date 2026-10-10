@@ -20,5 +20,7 @@ public sealed class GameCharacter
     public int Defense { get; set; }
     public int Dexterity { get; set; }
     public long Experience { get; set; }
+    public int HackingLevel { get; set; } = 1;
+    public long HackingExperience { get; set; }
     public ICollection<PlayerInventoryItem> Inventory { get; set; } = [];
 }

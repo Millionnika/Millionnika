@@ -5,6 +5,7 @@ using Millionnika.Api.Configuration;
 using Millionnika.Api.Data;
 using Millionnika.Api.Entities;
 using Millionnika.Api.Resources;
+using Millionnika.Api.Game;
 using Npgsql;
 
 namespace Millionnika.Api.Auth;
@@ -13,7 +14,8 @@ public sealed class AuthService(
     GameDbContext dbContext,
     IPasswordHasher<User> passwordHasher,
     IOptions<CharacterDefaultsOptions> characterDefaults,
-    IResourceRecoveryService resourceRecovery) : IAuthService
+    IResourceRecoveryService resourceRecovery,
+    IProgressionService progression) : IAuthService
 {
     public async Task<AuthServiceResult> RegisterAsync(
         RegisterRequest request,
@@ -69,7 +71,9 @@ public sealed class AuthService(
             Speed = defaults.Speed,
             Defense = defaults.Defense,
             Dexterity = defaults.Dexterity,
-            Experience = defaults.Experience
+            Experience = defaults.Experience,
+            HackingLevel = 1,
+            HackingExperience = 0
         };
 
         dbContext.Users.Add(user);
@@ -141,6 +145,7 @@ public sealed class AuthService(
             .FromSqlInterpolated($"SELECT * FROM characters WHERE \"UserId\" = {userId} FOR UPDATE")
             .SingleAsync(cancellationToken);
         var recovery = resourceRecovery.Apply(character);
+        progression.Apply(character);
 
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -157,7 +162,9 @@ public sealed class AuthService(
             character.Speed,
             character.Defense,
             character.Dexterity,
-            character.Experience);
+            character.Experience,
+            progression.GetGeneral(character.Experience),
+            progression.GetHacking(character.HackingExperience));
     }
 
     private static string Normalize(string value) => value.ToUpperInvariant();

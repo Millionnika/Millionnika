@@ -10,7 +10,13 @@ public sealed record ContractResponse(
     int CostNerve,
     decimal SuccessChance,
     long RewardCredits,
-    long RewardExperience);
+    long RewardExperience,
+    string Direction,
+    int MinimumLevel,
+    int MinimumHackingLevel,
+    long RewardHackingExperience,
+    bool IsAvailable,
+    string? LockReason);
 
 public sealed record TrainingConfigResponse(int EnergyCost, int StatGain, int ExperienceGain);
 
@@ -23,6 +29,7 @@ public sealed record ActionResultResponse(
     int NerveSpent,
     long CreditsAwarded,
     long ExperienceAwarded,
+    long HackingExperienceAwarded,
     string? StatName,
     int StatGain,
     PlayerStateResponse Player);
@@ -35,7 +42,10 @@ public sealed record PlayerStateResponse(
     int Speed,
     int Defense,
     int Dexterity,
-    long Experience);
+    long Experience,
+    int Level,
+    long HackingExperience,
+    int HackingLevel);
 
 public sealed record ActionLogResponse(
     string ActionType,

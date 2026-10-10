@@ -51,6 +51,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
             {
                 table.HasCheckConstraint("CK_characters_Credits", $"\"Credits\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
                 table.HasCheckConstraint("CK_characters_Experience", $"\"Experience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
+                table.HasCheckConstraint("CK_characters_Progression", $"\"Level\" BETWEEN 1 AND 20 AND \"HackingLevel\" BETWEEN 1 AND 20 AND \"HackingExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
                 table.HasCheckConstraint("CK_characters_Stats", $"\"Strength\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue} AND \"Speed\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue} AND \"Defense\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue} AND \"Dexterity\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue}");
             });
             entity.HasKey(character => character.Id);
@@ -61,11 +62,13 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
         {
             entity.ToTable("contracts", table =>
             {
-                table.HasCheckConstraint("CK_contracts_NumericLimits", $"\"CostNerve\" > 0 AND \"SuccessChance\" BETWEEN 0 AND 1 AND \"RewardCredits\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"RewardExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
+                table.HasCheckConstraint("CK_contracts_NumericLimits", $"\"CostNerve\" > 0 AND \"SuccessChance\" BETWEEN 0 AND 1 AND \"RewardCredits\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"RewardExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"RewardHackingExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
+                table.HasCheckConstraint("CK_contracts_Progression", "\"Direction\" IN ('normal', 'hacking') AND \"MinimumLevel\" BETWEEN 1 AND 20 AND \"MinimumHackingLevel\" BETWEEN 1 AND 20 AND (\"Direction\" = 'hacking' OR (\"MinimumHackingLevel\" = 1 AND \"RewardHackingExperience\" = 0))");
             });
             entity.HasKey(contract => contract.Id);
             entity.Property(contract => contract.Name).HasMaxLength(120).IsRequired();
             entity.Property(contract => contract.Description).HasMaxLength(500).IsRequired();
+            entity.Property(contract => contract.Direction).HasMaxLength(16).IsRequired();
             entity.Property(contract => contract.SuccessChance).HasPrecision(5, 4);
         });
 
@@ -73,7 +76,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
         {
             entity.ToTable("action_logs", table =>
             {
-                table.HasCheckConstraint("CK_action_logs_Economy", $"\"CreditsAwarded\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"ExperienceAwarded\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"CreditsSpent\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
+                table.HasCheckConstraint("CK_action_logs_Economy", $"\"CreditsAwarded\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"ExperienceAwarded\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"HackingExperienceAwarded\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"CreditsSpent\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
                 table.HasCheckConstraint("CK_action_logs_StatGain", $"\"StatGain\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue}");
                 table.HasCheckConstraint("CK_action_logs_RequestSignature", "\"RequestSignature\" <> ''");
             });
