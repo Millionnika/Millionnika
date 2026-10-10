@@ -147,6 +147,40 @@ public sealed class FriendServiceIntegrationTests
         });
     }
 
+    [Fact]
+    public async Task RemovingOnlyItemOnPageTwo_ReturnsExistingPage()
+    {
+        var users = CreateUsers(22);
+        await WithUsersAsync(users, async () =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            await using (var setup = CreateDbContext())
+            {
+                for (var index = 1; index < users.Count; index++)
+                {
+                    var (low, high) = FriendRules.CanonicalPair(users[0].Id, users[index].Id);
+                    setup.FriendRelations.Add(new FriendRelation
+                    {
+                        Id = Guid.NewGuid(), UserLowId = low, UserHighId = high,
+                        SenderId = users[0].Id, RecipientId = users[index].Id,
+                        Status = "Accepted", CreatedAtUtc = now, UpdatedAtUtc = now
+                    });
+                }
+                await setup.SaveChangesAsync();
+            }
+
+            var secondPage = await Call(service => service.GetListAsync(users[0].Id, "friends", 2, 20, default));
+            Assert.Single(secondPage.Items);
+            Assert.True((await Call(service => service.RemoveAsync(
+                users[0].Id, secondPage.Items[0].RelationId, default))).Succeeded);
+
+            var corrected = await Call(service => service.GetListAsync(users[0].Id, "friends", 2, 20, default));
+            Assert.Equal(1, corrected.Page);
+            Assert.Equal(1, corrected.TotalPages);
+            Assert.Equal(20, corrected.Items.Count);
+        });
+    }
+
     private static async Task<T> Call<T>(Func<FriendService, Task<T>> action)
     {
         await using var db = CreateDbContext();

@@ -106,6 +106,58 @@ public sealed class InventoryServiceIntegrationTests
     }
 
     [Fact]
+    public async Task ReusedRequestId_WithDifferentParameters_IsConflictWithoutSecondChange()
+    {
+        await WithPlayerAsync(100, async player =>
+        {
+            var requestId = Guid.NewGuid();
+            await using (var firstDb = CreateDbContext())
+            {
+                var first = await CreateService(firstDb).BuyAsync(player.UserId, requestId, EnergyItemId, 1, default);
+                Assert.False(first.Response.Replayed);
+            }
+            await using (var secondDb = CreateDbContext())
+            {
+                var conflict = await CreateService(secondDb).BuyAsync(player.UserId, requestId, EnergyItemId, 2, default);
+                Assert.True(conflict.Rejected);
+                Assert.Contains("других параметров", conflict.Response.Message);
+            }
+            await using (var replayDb = CreateDbContext())
+            {
+                var replay = await CreateService(replayDb).BuyAsync(player.UserId, requestId, EnergyItemId, 1, default);
+                Assert.True(replay.Response.Replayed);
+            }
+
+            await using var verificationDb = CreateDbContext();
+            Assert.Equal(75, await verificationDb.Characters.Where(value => value.Id == player.CharacterId)
+                .Select(value => value.Credits).SingleAsync());
+            Assert.Equal(1, await verificationDb.InventoryItems.Where(value => value.CharacterId == player.CharacterId)
+                .Select(value => value.Quantity).SingleAsync());
+        });
+    }
+
+    [Fact]
+    public async Task ReusedRequestId_ForDifferentAction_IsConflictWithoutUsingItem()
+    {
+        await WithPlayerAsync(100, async player =>
+        {
+            var requestId = Guid.NewGuid();
+            await using (var firstDb = CreateDbContext())
+                await CreateService(firstDb).BuyAsync(player.UserId, requestId, EnergyItemId, 1, default);
+            await using (var secondDb = CreateDbContext())
+            {
+                var conflict = await CreateService(secondDb).UseAsync(player.UserId, requestId, EnergyItemId, 1, default);
+                Assert.True(conflict.Rejected);
+                Assert.Contains("другого действия", conflict.Response.Message);
+            }
+
+            await using var verificationDb = CreateDbContext();
+            Assert.Equal(1, await verificationDb.InventoryItems.Where(value => value.CharacterId == player.CharacterId)
+                .Select(value => value.Quantity).SingleAsync());
+        });
+    }
+
+    [Fact]
     public async Task ParallelRequests_AreSerializedWithoutLostUpdates()
     {
         await WithPlayerAsync(100, async player =>

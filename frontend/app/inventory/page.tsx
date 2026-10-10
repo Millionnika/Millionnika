@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
+import { getPendingAction } from "@/lib/pendingAction";
 
 type InventoryItem = {
   itemId: string;
@@ -57,12 +58,14 @@ export default function InventoryPage() {
     const quantity = quantities[item.itemId] ?? 1;
 
     try {
+      const pending = getPendingAction("item_use", { itemId: item.itemId, quantity });
       const response = await fetch(`${API_URL}/api/game/inventory/use`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ requestId: crypto.randomUUID(), itemId: item.itemId, quantity }),
+        body: JSON.stringify({ requestId: pending.requestId, itemId: item.itemId, quantity }),
       });
+      pending.receivedResponse();
       if (response.status === 401) {
         router.replace("/login");
         return;
@@ -78,8 +81,8 @@ export default function InventoryPage() {
       }
       setMessage((await response.json()) as ActionResult);
       await loadData();
-    } catch {
-      setError("Сервер игры недоступен.");
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : "Сервер игры недоступен.");
     } finally {
       setBusyItemId(null);
     }

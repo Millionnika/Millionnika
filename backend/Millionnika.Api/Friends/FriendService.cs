@@ -46,10 +46,12 @@ public sealed class FriendService(GameDbContext dbContext, TimeProvider timeProv
         }).Where(value => !value.IsBlocked);
 
         var totalCount = await visible.CountAsync(cancellationToken);
+        var totalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
+        var actualPage = totalPages == 0 ? 1 : Math.Min(page, totalPages);
         var items = await visible
             .OrderBy(value => value.Username)
             .ThenBy(value => value.PlayerId)
-            .Skip((page - 1) * pageSize)
+            .Skip((actualPage - 1) * pageSize)
             .Take(pageSize)
             .Select(value => new FriendListItem(
                 value.Relation.Id,
@@ -58,8 +60,7 @@ public sealed class FriendService(GameDbContext dbContext, TimeProvider timeProv
                 value.Level,
                 value.Relation.CreatedAtUtc))
             .ToListAsync(cancellationToken);
-        var totalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
-        return new(items, page, pageSize, totalCount, totalPages);
+        return new(items, actualPage, pageSize, totalCount, totalPages);
     }
 
     public async Task<FriendOperationResult> SendRequestAsync(

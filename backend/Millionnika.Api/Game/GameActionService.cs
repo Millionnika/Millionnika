@@ -37,14 +37,17 @@ public sealed class GameActionService(
     {
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var character = await LockCharacterAsync(userId, cancellationToken);
-        resourceRecovery.Apply(character);
         var existing = await FindExistingAsync(userId, requestId, cancellationToken);
         if (existing is not null)
         {
+            if (existing.ActionType != ContractAction || existing.RequestSignature != ActionRequestSignature.Contract)
+                return RequestConflict(requestId, character);
+            resourceRecovery.Apply(character);
             await dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return ToResult(existing, character);
+            return ToResult(existing, character, replayed: true);
         }
+        resourceRecovery.Apply(character);
 
         var contract = await dbContext.Contracts.SingleOrDefaultAsync(
             candidate => candidate.IsActive, cancellationToken);
@@ -52,12 +55,12 @@ public sealed class GameActionService(
 
         if (contract is null || !GameRules.IsValidContractCost(contract.CostNerve))
         {
-            log = CreateLog(userId, requestId, ContractAction, false,
+            log = CreateLog(userId, requestId, ContractAction, ActionRequestSignature.Contract, false,
                 "Контракт сейчас недоступен. Ресурсы не списаны.", errorCode: "contract_unavailable");
         }
         else if (!GameRules.HasEnoughResource(character.Nerve, contract.CostNerve))
         {
-            log = CreateLog(userId, requestId, ContractAction, false,
+            log = CreateLog(userId, requestId, ContractAction, ActionRequestSignature.Contract, false,
                 "Недостаточно хладнокровия.", errorCode: "insufficient_nerve");
         }
         else
@@ -72,7 +75,7 @@ public sealed class GameActionService(
                     !GameNumericLimits.TryAdd(character.Experience, contract.RewardExperience,
                         GameNumericLimits.MaxEconomyValue, out experience))
                 {
-                    log = CreateLog(userId, requestId, ContractAction, false,
+                    log = CreateLog(userId, requestId, ContractAction, ActionRequestSignature.Contract, false,
                         "Награда превысила допустимый числовой предел. Ресурс не списан.",
                         errorCode: "numeric_limit");
                     dbContext.ActionLogs.Add(log);
@@ -89,7 +92,7 @@ public sealed class GameActionService(
             character.Experience = experience;
 
             log = CreateLog(
-                userId, requestId, ContractAction, succeeded,
+                userId, requestId, ContractAction, ActionRequestSignature.Contract, succeeded,
                 succeeded ? "Дрон перехвачен. Награда получена." : "Дрон ушёл. Награды нет.",
                 nerveSpent: contract.CostNerve,
                 creditsAwarded: succeeded ? contract.RewardCredits : 0,
@@ -110,21 +113,25 @@ public sealed class GameActionService(
     {
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var character = await LockCharacterAsync(userId, cancellationToken);
-        resourceRecovery.Apply(character);
+        var signature = ActionRequestSignature.Training(stat);
         var existing = await FindExistingAsync(userId, requestId, cancellationToken);
         if (existing is not null)
         {
+            if (existing.ActionType != TrainingAction || existing.RequestSignature != signature)
+                return RequestConflict(requestId, character);
+            resourceRecovery.Apply(character);
             await dbContext.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return ToResult(existing, character);
+            return ToResult(existing, character, replayed: true);
         }
+        resourceRecovery.Apply(character);
 
         var options = trainingOptions.Value;
         ActionLog log;
 
         if (!GameRules.HasEnoughResource(character.Energy, options.EnergyCost))
         {
-            log = CreateLog(userId, requestId, TrainingAction, false,
+            log = CreateLog(userId, requestId, TrainingAction, signature, false,
                 "Недостаточно энергии.", errorCode: "insufficient_energy", statName: stat.ToString());
         }
         else
@@ -133,7 +140,7 @@ public sealed class GameActionService(
                     GameNumericLimits.MaxEconomyValue, out var experience) ||
                 !GameRules.TryGetIncreasedStat(character, stat, options.StatGain, out var increasedStat))
             {
-                log = CreateLog(userId, requestId, TrainingAction, false,
+                log = CreateLog(userId, requestId, TrainingAction, signature, false,
                     "Тренировка превысила допустимый числовой предел. Энергия не списана.",
                     errorCode: "numeric_limit", statName: stat.ToString());
                 dbContext.ActionLogs.Add(log);
@@ -149,7 +156,7 @@ public sealed class GameActionService(
             GameRules.SetStat(character, stat, increasedStat);
 
             log = CreateLog(
-                userId, requestId, TrainingAction, true,
+                userId, requestId, TrainingAction, signature, true,
                 $"Тренировка завершена: {GetStatDisplayName(stat)} +{options.StatGain}.",
                 energySpent: options.EnergyCost,
                 experienceAwarded: options.ExperienceGain,
@@ -196,6 +203,7 @@ public sealed class GameActionService(
         Guid userId,
         Guid requestId,
         string actionType,
+        string requestSignature,
         bool succeeded,
         string message,
         string? errorCode = null,
@@ -207,15 +215,16 @@ public sealed class GameActionService(
         int statGain = 0) => new()
         {
             Id = Guid.NewGuid(), UserId = userId, RequestId = requestId,
-            ActionType = actionType, Succeeded = succeeded, ErrorCode = errorCode, Message = message,
+            ActionType = actionType, RequestSignature = requestSignature,
+            Succeeded = succeeded, ErrorCode = errorCode, Message = message,
             EnergySpent = energySpent, NerveSpent = nerveSpent,
             CreditsAwarded = creditsAwarded, ExperienceAwarded = experienceAwarded,
             StatName = statName, StatGain = statGain, CreatedAtUtc = DateTimeOffset.UtcNow
         };
 
-    private static GameActionResult ToResult(ActionLog log, GameCharacter character) => new(
+    private static GameActionResult ToResult(ActionLog log, GameCharacter character, bool replayed = false) => new(
         new ActionResultResponse(
-            log.RequestId, log.Succeeded, log.Message, log.EnergySpent, log.NerveSpent,
+            log.RequestId, replayed, log.Succeeded, log.Message, log.EnergySpent, log.NerveSpent,
             log.CreditsAwarded, log.ExperienceAwarded, log.StatName, log.StatGain,
             new PlayerStateResponse(
                 character.Credits, character.Energy, character.Nerve,
@@ -223,4 +232,15 @@ public sealed class GameActionService(
                 character.Experience)),
         ResourceRejected: log.ErrorCode is "insufficient_nerve" or "insufficient_energy" or
             "numeric_limit" or "contract_unavailable");
+
+    private static GameActionResult RequestConflict(Guid requestId, GameCharacter character) => new(
+        new ActionResultResponse(
+            requestId, false, false,
+            "Этот requestId уже использован для другого действия или других параметров.",
+            0, 0, 0, 0, null, 0,
+            new PlayerStateResponse(
+                character.Credits, character.Energy, character.Nerve,
+                character.Strength, character.Speed, character.Defense, character.Dexterity,
+                character.Experience)),
+        ResourceRejected: true);
 }

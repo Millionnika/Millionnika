@@ -31,6 +31,12 @@ export default function FriendsPage() {
       if (failed) { setError(await getErrorMessage(failed)); return; }
       const data = await Promise.all(responses.map((response) => response.json() as Promise<FriendList>));
       setLists({ friends: data[0], incoming: data[1], outgoing: data[2] });
+      setPages((current) => {
+        const corrected = { friends: data[0].page, incoming: data[1].page, outgoing: data[2].page };
+        return current.friends === corrected.friends && current.incoming === corrected.incoming && current.outgoing === corrected.outgoing
+          ? current
+          : corrected;
+      });
     } catch { setError("Сервер игры недоступен."); }
   }, [pages, router]);
 

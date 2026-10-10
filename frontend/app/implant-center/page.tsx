@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
+import { getPendingAction } from "@/lib/pendingAction";
 
 const stats = [
   { value: "strength", label: "Сила" },
@@ -42,12 +43,14 @@ export default function ImplantCenterPage() {
     setIsSubmitting(true);
 
     try {
+      const pending = getPendingAction("training", { stat: selectedStat });
       const response = await fetch(`${API_URL}/api/game/training/execute`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ requestId: crypto.randomUUID(), stat: selectedStat }),
+        body: JSON.stringify({ requestId: pending.requestId, stat: selectedStat }),
       });
+      pending.receivedResponse();
 
       if (response.status === 401) {
         router.replace("/login");
@@ -60,8 +63,8 @@ export default function ImplantCenterPage() {
       }
 
       setResult((await response.json()) as ActionResult);
-    } catch {
-      setError("Сервер игры недоступен.");
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : "Сервер игры недоступен.");
     } finally {
       setIsSubmitting(false);
     }

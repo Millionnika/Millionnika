@@ -15,6 +15,7 @@ public sealed record TrainingConfigResponse(int EnergyCost, int StatGain, int Ex
 
 public sealed record ActionResultResponse(
     Guid RequestId,
+    bool Replayed,
     bool Succeeded,
     string Message,
     int EnergySpent,

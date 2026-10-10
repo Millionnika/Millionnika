@@ -7,6 +7,7 @@ public sealed class ActionLog
     public User User { get; set; } = null!;
     public Guid RequestId { get; set; }
     public string ActionType { get; set; } = string.Empty;
+    public string RequestSignature { get; set; } = string.Empty;
     public bool Succeeded { get; set; }
     public string? ErrorCode { get; set; }
     public string Message { get; set; } = string.Empty;

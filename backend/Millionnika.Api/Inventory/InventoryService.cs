@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Millionnika.Api.Data;
 using Millionnika.Api.Entities;
+using Millionnika.Api.Game;
 using Millionnika.Api.Resources;
 
 namespace Millionnika.Api.Inventory;
@@ -41,10 +42,11 @@ public sealed class InventoryService(
     {
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var character = await LockCharacterAsync(userId, cancellationToken);
+        var signature = ActionRequestSignature.Purchase(itemId, quantity);
         var existing = await FindExistingAsync(userId, requestId, cancellationToken);
         if (existing is not null)
         {
-            var replay = await ReplayAsync(existing, PurchaseAction, character, cancellationToken);
+            var replay = await ReplayAsync(existing, PurchaseAction, signature, character, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return replay;
         }
@@ -56,17 +58,17 @@ public sealed class InventoryService(
 
         if (item is null)
         {
-            log = CreateLog(userId, requestId, PurchaseAction, false,
+            log = CreateLog(userId, requestId, PurchaseAction, signature, false,
                 "Предмет недоступен в магазине.", "item_unavailable", itemId, quantity);
         }
         else if (!ShopRules.TryCalculatePrice(item.Price, quantity, out var totalPrice))
         {
-            log = CreateLog(userId, requestId, PurchaseAction, false,
+            log = CreateLog(userId, requestId, PurchaseAction, signature, false,
                 "Некорректные параметры покупки.", "invalid_purchase", itemId, quantity);
         }
         else if (!ShopRules.HasEnoughCredits(character.Credits, totalPrice))
         {
-            log = CreateLog(userId, requestId, PurchaseAction, false,
+            log = CreateLog(userId, requestId, PurchaseAction, signature, false,
                 "Недостаточно кредитов.", "insufficient_credits", itemId, quantity);
         }
         else
@@ -77,7 +79,7 @@ public sealed class InventoryService(
 
             if (inventory is not null && inventory.Quantity > int.MaxValue - quantity)
             {
-                log = CreateLog(userId, requestId, PurchaseAction, false,
+                log = CreateLog(userId, requestId, PurchaseAction, signature, false,
                     "Достигнут предел количества предмета.", "inventory_limit", itemId, quantity);
             }
             else
@@ -98,7 +100,7 @@ public sealed class InventoryService(
                     inventory.Quantity += quantity;
                 }
 
-                log = CreateLog(userId, requestId, PurchaseAction, true,
+                log = CreateLog(userId, requestId, PurchaseAction, signature, true,
                     $"Куплено: {item.Name} ×{quantity}.", null, itemId, quantity, totalPrice);
             }
         }
@@ -119,15 +121,19 @@ public sealed class InventoryService(
     {
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var character = await LockCharacterAsync(userId, cancellationToken);
-        resourceRecovery.Apply(character);
+        var signature = ActionRequestSignature.UseItem(itemId, quantity);
         var existing = await FindExistingAsync(userId, requestId, cancellationToken);
         if (existing is not null)
         {
+            if (existing.ActionType != UseAction || existing.RequestSignature != signature)
+                return RequestConflict(requestId, character);
+            resourceRecovery.Apply(character);
             await dbContext.SaveChangesAsync(cancellationToken);
-            var replay = await ReplayAsync(existing, UseAction, character, cancellationToken);
+            var replay = await ReplayAsync(existing, UseAction, signature, character, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return replay;
         }
+        resourceRecovery.Apply(character);
 
         var item = await dbContext.Items.SingleOrDefaultAsync(
             candidate => candidate.Id == itemId,
@@ -139,17 +145,17 @@ public sealed class InventoryService(
 
         if (item is null || item.Type != "consumable")
         {
-            log = CreateLog(userId, requestId, UseAction, false,
+            log = CreateLog(userId, requestId, UseAction, signature, false,
                 "Этот предмет нельзя использовать.", "item_unavailable", itemId, quantity);
         }
         else if (inventory is null || !ShopRules.HasEnoughItems(inventory.Quantity, quantity))
         {
-            log = CreateLog(userId, requestId, UseAction, false,
+            log = CreateLog(userId, requestId, UseAction, signature, false,
                 "Недостаточно предметов в инвентаре.", "insufficient_items", itemId, quantity);
         }
         else if (!TryApplyEffect(character, item, quantity, out var resourceWasFull))
         {
-            log = CreateLog(userId, requestId, UseAction, false,
+            log = CreateLog(userId, requestId, UseAction, signature, false,
                 resourceWasFull ? "Ресурс уже полностью восстановлен." : "Эффект предмета не поддерживается.",
                 resourceWasFull ? "resource_full" : "invalid_item_effect", itemId, quantity);
         }
@@ -161,7 +167,7 @@ public sealed class InventoryService(
                 dbContext.InventoryItems.Remove(inventory);
             }
 
-            log = CreateLog(userId, requestId, UseAction, true,
+            log = CreateLog(userId, requestId, UseAction, signature, true,
                 $"Использовано: {item.Name} ×{quantity}.", null, itemId, quantity);
         }
 
@@ -175,23 +181,21 @@ public sealed class InventoryService(
     private async Task<InventoryActionResult> ReplayAsync(
         ActionLog log,
         string expectedAction,
+        string expectedSignature,
         GameCharacter character,
         CancellationToken cancellationToken)
     {
-        if (log.ActionType != expectedAction)
-        {
-            var response = CreateResponse(log.RequestId, false,
-                "Этот ключ действия уже использован.", character, 0);
-            return new InventoryActionResult(response, true);
-        }
+        if (log.ActionType != expectedAction || log.RequestSignature != expectedSignature)
+            return RequestConflict(log.RequestId, character);
 
-        return await BuildResultAsync(log, character, cancellationToken);
+        return await BuildResultAsync(log, character, cancellationToken, replayed: true);
     }
 
     private async Task<InventoryActionResult> BuildResultAsync(
         ActionLog log,
         GameCharacter character,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool replayed = false)
     {
         var inventoryQuantity = log.ItemId is null
             ? 0
@@ -201,18 +205,20 @@ public sealed class InventoryService(
                 .SingleOrDefaultAsync(cancellationToken);
 
         return new InventoryActionResult(
-            CreateResponse(log.RequestId, log.Succeeded, log.Message, character, inventoryQuantity),
+            CreateResponse(log.RequestId, replayed, log.Succeeded, log.Message, character, inventoryQuantity),
             !log.Succeeded);
     }
 
     private static InventoryActionResponse CreateResponse(
         Guid requestId,
+        bool replayed,
         bool succeeded,
         string message,
         GameCharacter character,
         int inventoryQuantity) =>
         new(
             requestId,
+            replayed,
             succeeded,
             message,
             character.Credits,
@@ -265,6 +271,7 @@ public sealed class InventoryService(
         Guid userId,
         Guid requestId,
         string actionType,
+        string requestSignature,
         bool succeeded,
         string message,
         string? errorCode,
@@ -276,6 +283,7 @@ public sealed class InventoryService(
             UserId = userId,
             RequestId = requestId,
             ActionType = actionType,
+            RequestSignature = requestSignature,
             Succeeded = succeeded,
             ErrorCode = errorCode,
             Message = message,
@@ -284,4 +292,10 @@ public sealed class InventoryService(
             CreditsSpent = creditsSpent,
             CreatedAtUtc = resourceRecovery.UtcNow
         };
+
+    private static InventoryActionResult RequestConflict(Guid requestId, GameCharacter character) => new(
+        CreateResponse(requestId, false, false,
+            "Этот requestId уже использован для другого действия или других параметров.",
+            character, 0),
+        Rejected: true);
 }

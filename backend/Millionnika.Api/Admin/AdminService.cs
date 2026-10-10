@@ -69,12 +69,14 @@ public sealed class AdminService(
 
         var oldValue = Resources(character);
         var now = resourceRecovery.UtcNow;
+        var energyChanged = character.Energy != request.Energy;
+        var nerveChanged = character.Nerve != request.Nerve;
         character.Credits = request.Credits;
         character.Energy = request.Energy;
         character.Nerve = request.Nerve;
         character.Health = request.Health;
-        character.LastEnergyRecoveryAtUtc = now;
-        character.LastNerveRecoveryAtUtc = now;
+        if (energyChanged) character.LastEnergyRecoveryAtUtc = now;
+        if (nerveChanged) character.LastNerveRecoveryAtUtc = now;
         AddAudit(adminId, "resources_update", "user", playerId.ToString(), oldValue,
             Resources(character), request.Reason!);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -171,7 +173,8 @@ public sealed class AdminService(
 
     private static object Resources(GameCharacter character) => new
     {
-        character.Credits, character.Energy, character.Nerve, character.Health
+        character.Credits, character.Energy, character.Nerve, character.Health,
+        character.LastEnergyRecoveryAtUtc, character.LastNerveRecoveryAtUtc
     };
 
     private static object ContractValues(Contract contract) => new

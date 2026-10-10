@@ -31,6 +31,7 @@ public sealed record InventoryResourcesResponse(
 
 public sealed record InventoryActionResponse(
     Guid RequestId,
+    bool Replayed,
     bool Succeeded,
     string Message,
     long Credits,

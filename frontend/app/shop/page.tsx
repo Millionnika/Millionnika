@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
+import { getPendingAction } from "@/lib/pendingAction";
 
 type ShopItem = {
   id: string;
@@ -49,12 +50,14 @@ export default function ShopPage() {
     const quantity = quantities[item.id] ?? 1;
 
     try {
+      const pending = getPendingAction("shop_purchase", { itemId: item.id, quantity });
       const response = await fetch(`${API_URL}/api/game/shop/buy`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ requestId: crypto.randomUUID(), itemId: item.id, quantity }),
+        body: JSON.stringify({ requestId: pending.requestId, itemId: item.id, quantity }),
       });
+      pending.receivedResponse();
       if (response.status === 401) {
         router.replace("/login");
         return;
@@ -72,8 +75,8 @@ export default function ShopPage() {
       const result = (await response.json()) as ActionResult;
       setMessage(result);
       setCredits(result.credits);
-    } catch {
-      setError("Сервер игры недоступен.");
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : "Сервер игры недоступен.");
     } finally {
       setBusyItemId(null);
     }

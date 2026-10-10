@@ -60,6 +60,7 @@ public static class AdminBootstrapper
             Experience = defaults.Experience
         };
         db.Users.Add(user);
+        db.AdminAuditLogs.Add(AdminAuditFactory.AdminCreated(user.Id, time));
         await db.SaveChangesAsync(cancellationToken);
         Console.WriteLine("Администратор создан. Пароль нигде не сохранён в открытом виде.");
         return 0;

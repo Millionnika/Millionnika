@@ -14,6 +14,7 @@ using Millionnika.Api.Players;
 using System.Security.Claims;
 using Millionnika.Api.Resources;
 using Millionnika.Api.Friends;
+using Millionnika.Api.Security;
 using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -134,6 +135,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+app.UseMiddleware<SafeExceptionMiddleware>();
 app.UseCors();
 app.UseAuthentication();
 app.UseMiddleware<RequestSecurityMiddleware>();
@@ -173,7 +175,9 @@ try
 }
 catch (Exception exception) when (exception is NpgsqlException or TimeoutException)
 {
-    app.Logger.LogError(exception, "Database migrations could not be applied during startup");
+    app.Logger.LogError(
+        "Database migrations could not be applied during startup ({ExceptionType})",
+        exception.GetType().Name);
 }
 
 if (args.Contains("--create-admin", StringComparer.Ordinal))

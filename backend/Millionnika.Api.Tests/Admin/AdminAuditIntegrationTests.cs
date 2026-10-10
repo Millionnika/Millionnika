@@ -44,6 +44,9 @@ public sealed class AdminAuditIntegrationTests
             using var newValues = JsonDocument.Parse(audit.NewValue);
             Assert.Equal(100, oldValues.RootElement.GetProperty("Credits").GetInt64());
             Assert.Equal(777, newValues.RootElement.GetProperty("Credits").GetInt64());
+            Assert.NotEqual(
+                oldValues.RootElement.GetProperty("LastEnergyRecoveryAtUtc").GetDateTimeOffset(),
+                newValues.RootElement.GetProperty("LastEnergyRecoveryAtUtc").GetDateTimeOffset());
         }
         finally
         {
@@ -51,6 +54,46 @@ public sealed class AdminAuditIntegrationTests
             await cleanupDb.AdminAuditLogs.Where(log => log.AdminUserId == admin.Id).ExecuteDeleteAsync();
             await cleanupDb.Users.Where(user => user.Id == admin.Id || user.Id == player.Id).ExecuteDeleteAsync();
         }
+    }
+
+    [Fact]
+    public async Task SavingUnchangedResources_PreservesRecoveryMarksAndAuditsThem()
+    {
+        var now = DateTimeOffset.UtcNow.AddMinutes(-7);
+        var admin = CreateUser($"Admin{Guid.NewGuid():N}"[..20], "Admin", now);
+        var player = CreateUser($"Player{Guid.NewGuid():N}"[..20], "Player", now);
+        await using (var setup = CreateDbContext()) { setup.Users.AddRange(admin, player); await setup.SaveChangesAsync(); }
+        try
+        {
+            await using var db = CreateDbContext();
+            var result = await CreateService(db).UpdateResourcesAsync(admin.Id, player.Id,
+                new UpdateResourcesRequest(100, 100, 10, 100, "Проверка отметок"), default);
+            Assert.True(result.Succeeded);
+            await using var verify = CreateDbContext();
+            var character = await verify.Characters.SingleAsync(value => value.UserId == player.Id);
+            Assert.Equal(now.ToUnixTimeMilliseconds(), character.LastEnergyRecoveryAtUtc.ToUnixTimeMilliseconds());
+            Assert.Equal(now.ToUnixTimeMilliseconds(), character.LastNerveRecoveryAtUtc.ToUnixTimeMilliseconds());
+            var audit = await verify.AdminAuditLogs.SingleAsync(value => value.AdminUserId == admin.Id);
+            Assert.Contains("LastEnergyRecoveryAtUtc", audit.OldValue);
+            Assert.Contains("LastNerveRecoveryAtUtc", audit.NewValue);
+        }
+        finally
+        {
+            await using var cleanup = CreateDbContext();
+            await cleanup.AdminAuditLogs.Where(value => value.AdminUserId == admin.Id).ExecuteDeleteAsync();
+            await cleanup.Users.Where(value => value.Id == admin.Id || value.Id == player.Id).ExecuteDeleteAsync();
+        }
+    }
+
+    [Fact]
+    public void LocalAdminAudit_ContainsNoAccountSecrets()
+    {
+        var audit = AdminAuditFactory.AdminCreated(Guid.NewGuid(), DateTimeOffset.UtcNow);
+        var serialized = audit.OldValue + audit.NewValue;
+        Assert.Equal("admin_created", audit.Action);
+        Assert.DoesNotContain("Password", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Hash", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Email", serialized, StringComparison.OrdinalIgnoreCase);
     }
 
     private static AdminService CreateService(GameDbContext db)

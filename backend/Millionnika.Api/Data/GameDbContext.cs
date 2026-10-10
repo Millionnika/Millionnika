@@ -74,9 +74,11 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
             {
                 table.HasCheckConstraint("CK_action_logs_Economy", $"\"CreditsAwarded\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"ExperienceAwarded\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"CreditsSpent\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
                 table.HasCheckConstraint("CK_action_logs_StatGain", $"\"StatGain\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue}");
+                table.HasCheckConstraint("CK_action_logs_RequestSignature", "\"RequestSignature\" <> ''");
             });
             entity.HasKey(log => log.Id);
             entity.Property(log => log.ActionType).HasMaxLength(32).IsRequired();
+            entity.Property(log => log.RequestSignature).HasMaxLength(160).IsRequired();
             entity.Property(log => log.Message).HasMaxLength(240).IsRequired();
             entity.Property(log => log.ErrorCode).HasMaxLength(40);
             entity.Property(log => log.StatName).HasMaxLength(16);

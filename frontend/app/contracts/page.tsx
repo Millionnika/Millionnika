@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
+import { getPendingAction } from "@/lib/pendingAction";
 
 type Contract = {
   name: string;
@@ -67,15 +68,16 @@ export default function ContractsPage() {
   async function executeContract() {
     setError("");
     setIsSubmitting(true);
-    const requestId = crypto.randomUUID();
 
     try {
+      const pending = getPendingAction("contract", {});
       const response = await fetch(`${API_URL}/api/game/contract/execute`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ requestId }),
+        body: JSON.stringify({ requestId: pending.requestId }),
       });
+      pending.receivedResponse();
 
       if (response.status === 401) {
         router.replace("/login");
@@ -89,8 +91,8 @@ export default function ContractsPage() {
 
       setResult((await response.json()) as ActionResult);
       await loadData();
-    } catch {
-      setError("Сервер игры недоступен.");
+    } catch (exception) {
+      setError(exception instanceof Error ? exception.message : "Сервер игры недоступен.");
     } finally {
       setIsSubmitting(false);
     }
