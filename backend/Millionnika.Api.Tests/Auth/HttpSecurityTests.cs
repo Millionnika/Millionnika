@@ -373,6 +373,86 @@ public sealed class HttpSecurityTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task StaleContractPage_DisabledContractReturnsConflictWithoutChanges()
+    {
+        await StartAsync();
+        var client = Browser();
+        var account = await RegisterAsync(client);
+        using var opened = await client.GetAsync("/api/game/contract");
+        Assert.Equal(HttpStatusCode.OK, opened.StatusCode);
+
+        Guid contractId;
+        await using (var setup = TestDatabase.CreateDbContext())
+        {
+            var contract = await setup.Contracts.SingleAsync();
+            contractId = contract.Id;
+            contract.IsActive = false;
+            await setup.SaveChangesAsync();
+        }
+
+        try
+        {
+            using var unavailable = await client.GetAsync("/api/game/contract");
+            Assert.Equal(HttpStatusCode.NotFound, unavailable.StatusCode);
+            using var execute = await SendAsync(
+                client, "/api/game/contract/execute", new { requestId = Guid.NewGuid() });
+            Assert.Equal(HttpStatusCode.Conflict, execute.StatusCode);
+            var body = await execute.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.False(body.GetProperty("succeeded").GetBoolean());
+            Assert.Contains("недоступен", body.GetProperty("message").GetString(), StringComparison.OrdinalIgnoreCase);
+
+            await using var verify = TestDatabase.CreateDbContext();
+            var character = await verify.Characters.AsNoTracking().SingleAsync(value => value.UserId == account.Id);
+            Assert.Equal(100, character.Credits);
+            Assert.Equal(0, character.Experience);
+            Assert.Equal(10, character.Nerve);
+        }
+        finally
+        {
+            await using var restore = TestDatabase.CreateDbContext();
+            await restore.Contracts.Where(value => value.Id == contractId)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(value => value.IsActive, true));
+        }
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task AdminApi_RejectsNonPositiveContractCost(int cost)
+    {
+        await StartAsync();
+        var adminClient = Browser();
+        var admin = await RegisterAsync(adminClient);
+        Guid contractId;
+        int originalCost;
+        await using (var setup = TestDatabase.CreateDbContext())
+        {
+            await setup.Users.Where(value => value.Id == admin.Id)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(value => value.Role, "Admin"));
+            var contract = await setup.Contracts.AsNoTracking().SingleAsync();
+            contractId = contract.Id;
+            originalCost = contract.CostNerve;
+        }
+
+        using var response = await SendAsync(adminClient, $"/api/admin/contracts/{contractId}", new
+        {
+            costNerve = cost,
+            successChance = 0.8m,
+            rewardCredits = 50,
+            rewardExperience = 10,
+            isActive = true,
+            reason = "HTTP contract cost validation"
+        }, "PUT");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains("больше нуля", body.GetProperty("message").GetString(), StringComparison.OrdinalIgnoreCase);
+
+        await using var verify = TestDatabase.CreateDbContext();
+        Assert.Equal(originalCost, await verify.Contracts.Where(value => value.Id == contractId)
+            .Select(value => value.CostNerve).SingleAsync());
+    }
+
     private async Task StopAsync()
     {
         if (server is null) return;

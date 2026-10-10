@@ -32,6 +32,7 @@ export default function ContractsPage() {
   const [logs, setLogs] = useState<ActionLog[]>([]);
   const [result, setResult] = useState<ActionResult | null>(null);
   const [error, setError] = useState("");
+  const [isUnavailable, setIsUnavailable] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function loadData() {
@@ -45,11 +46,17 @@ export default function ContractsPage() {
       return;
     }
 
-    if (!contractResponse.ok || !logsResponse.ok) {
+    if (!logsResponse.ok || (!contractResponse.ok && contractResponse.status !== 404)) {
       throw new Error("Game data request failed");
     }
 
-    setContract((await contractResponse.json()) as Contract);
+    if (contractResponse.status === 404) {
+      setContract(null);
+      setIsUnavailable(true);
+    } else {
+      setContract((await contractResponse.json()) as Contract);
+      setIsUnavailable(false);
+    }
     setLogs((await logsResponse.json()) as ActionLog[]);
   }
 
@@ -89,7 +96,7 @@ export default function ContractsPage() {
     }
   }
 
-  if (!contract && !error) return <main><p className="loading">Загрузка контракта…</p></main>;
+  if (!contract && !error && !isUnavailable) return <main><p className="loading">Загрузка контракта…</p></main>;
 
   return (
     <main>
@@ -107,6 +114,7 @@ export default function ContractsPage() {
         )}
 
         {result && <p className={result.succeeded ? "action-result success" : "action-result failure"}>{result.message}</p>}
+        {isUnavailable && !result && <p className="field-hint">Активных контрактов сейчас нет.</p>}
         {error && <p className="form-error">{error}</p>}
 
         <button className="primary-button action-button" type="button" onClick={executeContract} disabled={!contract || isSubmitting}>

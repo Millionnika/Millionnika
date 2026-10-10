@@ -93,7 +93,8 @@ public sealed class AdminService(
         Guid adminId, Guid contractId, UpdateContractRequest request, CancellationToken cancellationToken)
     {
         if (!AdminRules.IsContractValid(request))
-            return AdminMutationResult.Failure("Проверьте параметры контракта: награды не могут превышать 1 триллион.");
+            return AdminMutationResult.Failure(
+                "Проверьте параметры контракта: стоимость должна быть больше нуля, награды — не более 1 триллиона.");
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var contract = await dbContext.Contracts
             .FromSqlInterpolated($"SELECT * FROM contracts WHERE \"Id\" = {contractId} FOR UPDATE")

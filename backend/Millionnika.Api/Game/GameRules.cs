@@ -21,6 +21,8 @@ public static class GameRules
     public static bool HasEnoughResource(int current, int cost) =>
         cost > 0 && current >= cost;
 
+    public static bool IsValidContractCost(int cost) => cost > 0;
+
     public static bool TryGetIncreasedStat(
         GameCharacter character, TrainingStat stat, int amount, out int increased)
     {

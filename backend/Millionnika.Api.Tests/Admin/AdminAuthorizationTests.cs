@@ -61,6 +61,15 @@ public sealed class AdminAuthorizationTests
             GameNumericLimits.MaxEconomyValue + 1, "Описание", "energy", 1, true, "Выше предела")));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Contract_RejectsNonPositiveCost(int cost)
+    {
+        Assert.False(AdminRules.IsContractValid(new UpdateContractRequest(
+            cost, 0.8m, 50, 10, true, "Проверка стоимости")));
+    }
+
     private static ClaimsPrincipal PrincipalWithRole(string role) =>
         new(new ClaimsIdentity([new Claim(ClaimTypes.Role, role)], "test"));
 }

@@ -18,7 +18,7 @@ public sealed class GameActionService(
 
     public async Task<ContractResponse?> GetContractAsync(CancellationToken cancellationToken) =>
         await dbContext.Contracts.AsNoTracking()
-            .Where(contract => contract.IsActive)
+            .Where(contract => contract.IsActive && contract.CostNerve > 0)
             .Select(contract => new ContractResponse(
                 contract.Id, contract.Name, contract.CostNerve, contract.SuccessChance,
                 contract.RewardCredits, contract.RewardExperience))
@@ -46,10 +46,16 @@ public sealed class GameActionService(
             return ToResult(existing, character);
         }
 
-        var contract = await dbContext.Contracts.SingleAsync(candidate => candidate.IsActive, cancellationToken);
+        var contract = await dbContext.Contracts.SingleOrDefaultAsync(
+            candidate => candidate.IsActive, cancellationToken);
         ActionLog log;
 
-        if (!GameRules.HasEnoughResource(character.Nerve, contract.CostNerve))
+        if (contract is null || !GameRules.IsValidContractCost(contract.CostNerve))
+        {
+            log = CreateLog(userId, requestId, ContractAction, false,
+                "Контракт сейчас недоступен. Ресурсы не списаны.", errorCode: "contract_unavailable");
+        }
+        else if (!GameRules.HasEnoughResource(character.Nerve, contract.CostNerve))
         {
             log = CreateLog(userId, requestId, ContractAction, false,
                 "Недостаточно хладнокровия.", errorCode: "insufficient_nerve");
@@ -215,5 +221,6 @@ public sealed class GameActionService(
                 character.Credits, character.Energy, character.Nerve,
                 character.Strength, character.Speed, character.Defense, character.Dexterity,
                 character.Experience)),
-        ResourceRejected: log.ErrorCode is "insufficient_nerve" or "insufficient_energy" or "numeric_limit");
+        ResourceRejected: log.ErrorCode is "insufficient_nerve" or "insufficient_energy" or
+            "numeric_limit" or "contract_unavailable");
 }

@@ -61,7 +61,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
         {
             entity.ToTable("contracts", table =>
             {
-                table.HasCheckConstraint("CK_contracts_NumericLimits", $"\"CostNerve\" >= 0 AND \"SuccessChance\" BETWEEN 0 AND 1 AND \"RewardCredits\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"RewardExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
+                table.HasCheckConstraint("CK_contracts_NumericLimits", $"\"CostNerve\" > 0 AND \"SuccessChance\" BETWEEN 0 AND 1 AND \"RewardCredits\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"RewardExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
             });
             entity.HasKey(contract => contract.Id);
             entity.Property(contract => contract.Name).HasMaxLength(120).IsRequired();

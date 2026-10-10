@@ -28,6 +28,15 @@ public sealed class GameRulesTests
     }
 
     [Theory]
+    [InlineData(1, true)]
+    [InlineData(0, false)]
+    [InlineData(-1, false)]
+    public void ContractCost_MustBePositive(int cost, bool expected)
+    {
+        Assert.Equal(expected, GameRules.IsValidContractCost(cost));
+    }
+
+    [Theory]
     [InlineData("strength", TrainingStat.Strength)]
     [InlineData("SPEED", TrainingStat.Speed)]
     [InlineData("defense", TrainingStat.Defense)]

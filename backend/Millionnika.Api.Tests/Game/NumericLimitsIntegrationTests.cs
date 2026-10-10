@@ -164,7 +164,7 @@ public sealed class NumericLimitsIntegrationTests
                 await repair.Database.ExecuteSqlInterpolatedAsync(
                     $"UPDATE characters SET \"Credits\" = {100L} WHERE \"Id\" = {player.CharacterId}");
             await using (var migrate = TestDatabase.CreateDbContext())
-                await migrate.GetService<IMigrator>().MigrateAsync("20261011140000_NumericLimits");
+                await migrate.GetService<IMigrator>().MigrateAsync();
             await DeletePlayerAsync(player.UserId);
         }
     }

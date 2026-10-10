@@ -18,7 +18,7 @@ public static class AdminRules
         health >= 0 && health <= maxHealth;
 
     public static bool IsContractValid(UpdateContractRequest request) =>
-        request.CostNerve >= 0 && request.SuccessChance is >= 0 and <= 1 &&
+        GameRules.IsValidContractCost(request.CostNerve) && request.SuccessChance is >= 0 and <= 1 &&
         request.RewardCredits is >= 0 and <= GameNumericLimits.MaxEconomyValue &&
         request.RewardExperience is >= 0 and <= GameNumericLimits.MaxEconomyValue && IsReasonValid(request.Reason);
 
