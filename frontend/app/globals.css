@@ -152,6 +152,42 @@ input:focus, textarea:focus, select:focus { border-color: var(--teal); box-shado
 .item-purchase .primary-button { min-height: 36px; }
 .inventory-link { margin-top: 18px; }
 
+.equipment-section { margin-top: 20px; }
+.equipment-section .section-title { margin-bottom: 8px; }
+.equipped-grid { display: grid; gap: 8px; }
+.equipped-grid.weapons { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.equipped-grid.armour { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.equipped-slot { display: grid; min-width: 0; min-height: 142px; grid-template-rows: auto 48px auto auto auto; gap: 5px; justify-items: center; padding: 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-soft); text-align: center; }
+.equipped-slot > span { width: 100%; padding-bottom: 5px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: .76rem; }
+.equipped-slot > strong { max-width: 100%; overflow-wrap: anywhere; color: var(--teal-dark); font-size: .86rem; }
+.equipped-slot > small { color: var(--muted); font-size: .72rem; }
+.equipment-silhouette { display: grid; width: 48px; height: 48px; place-items: center; color: #9baba7; font-size: 1.15rem; font-weight: 900; }
+.equipped-slot.filled .equipment-silhouette { border: 1px solid #b8d8d3; border-radius: 6px; color: var(--teal-dark); background: var(--teal-soft); }
+.equipment-remove { min-height: 28px; padding: 0 9px; font-size: .75rem; }
+.inventory-section-title { margin-top: 24px; }
+.inventory-filters { display: flex; flex-wrap: wrap; gap: 5px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-soft); }
+.inventory-filters button { min-height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 5px; color: var(--muted); background: #fff; cursor: pointer; }
+.inventory-filters button.active { border-color: var(--teal); color: #fff; background: var(--teal); }
+.inventory-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.inventory-card { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 10px; min-width: 0; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+.inventory-item-icon { display: grid; width: 46px; height: 46px; place-items: center; border: 1px solid #b8d8d3; border-radius: 6px; color: var(--teal-dark); background: var(--teal-soft); font-size: 1.15rem; font-weight: 900; }
+.inventory-item-icon.armor { color: #7d5628; border-color: #e4c9a8; background: #fbf2e7; }
+.inventory-item-icon.ammunition { color: #795c13; border-color: #dfcf91; background: #fff9dd; }
+.inventory-item-icon.consumable { color: #2f714e; border-color: #b9dcc8; background: #edf8f2; }
+.inventory-card-body { min-width: 0; }
+.inventory-card-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.inventory-card-heading h2 { min-width: 0; margin: 0; overflow-wrap: anywhere; font-size: .94rem; }
+.inventory-card-heading strong { flex: 0 0 auto; color: var(--teal-dark); font-size: .78rem; }
+.inventory-card-body > p { margin: 5px 0 0; color: var(--muted); font-size: .82rem; line-height: 1.4; }
+.inventory-meta { color: var(--muted); font-size: .76rem !important; }
+.inventory-consume { display: flex; align-items: end; gap: 7px; margin-top: 9px; }
+.inventory-consume label { width: 86px; gap: 3px; }
+.inventory-consume label span { font-size: .7rem; }
+.inventory-consume input { min-height: 34px; padding: 5px 8px; }
+.compact-action { width: auto; min-height: 34px; padding: 0 12px; font-size: .8rem; }
+.inventory-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 9px; }
+.equipped-badge { padding: 5px 8px; border: 1px solid #bddfcd; border-radius: 5px; color: #1f714a; background: #edf8f2; font-size: .76rem; font-weight: 700; }
+
 .player-search { display: flex; gap: 8px; margin: 20px 0; }
 .player-results, .friend-list { display: grid; gap: 8px; margin-top: 12px; }
 .player-result { display: grid; grid-template-columns: minmax(150px, .3fr) 1fr; gap: 14px; padding: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-soft); text-decoration: none; }
@@ -210,6 +246,7 @@ input:focus, textarea:focus, select:focus { border-color: var(--teal); box-shado
 @media (max-width: 1050px) {
   .item-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stats-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .equipped-grid.armour { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 720px) {
@@ -233,6 +270,8 @@ input:focus, textarea:focus, select:focus { border-color: var(--teal); box-shado
   .shop-tools > input { width: 100%; }
   .item-card { grid-template-columns: 46px minmax(0, 1fr); }
   .item-icon { width: 46px; height: 46px; }
+  .equipped-grid.weapons, .equipped-grid.armour { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .inventory-grid { grid-template-columns: 1fr; }
   .admin-form { grid-template-columns: 1fr; }
   .admin-form .reason-field { grid-column: auto; }
   .admin-inline-form, .admin-row, .player-search, .pagination { align-items: stretch; flex-direction: column; }
@@ -246,4 +285,6 @@ input:focus, textarea:focus, select:focus { border-color: var(--teal); box-shado
   .stats-grid { grid-template-columns: 1fr; }
   .stat-selector { grid-template-columns: 1fr; }
   .item-purchase { grid-template-columns: 82px 1fr; }
+  .inventory-card-heading { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .inventory-consume { align-items: stretch; }
 }

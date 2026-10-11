@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
 import { getPendingAction } from "@/lib/pendingAction";
 import { GameNav } from "@/components/GameNav";
@@ -14,11 +14,18 @@ type InventoryItem = {
   caliber: string; clipSize: number; rateOfFireMin: number; rateOfFireMax: number;
 };
 type ActionResult = { succeeded: boolean; message: string };
+type InventoryFilter = "all" | "weapon" | "armor" | "ammunition" | "consumable";
 
 const slotNames: Record<string, string> = {
-  primary: "Основное", secondary: "Вторичное", melee: "Ближний бой", temporary: "Временное",
+  primary: "Основное оружие", secondary: "Вторичное оружие", melee: "Ближний бой", temporary: "Временное",
   helmet: "Голова", body: "Корпус", pants: "Ноги", gloves: "Перчатки", boots: "Обувь",
 };
+const weaponSlots = ["primary", "secondary", "melee", "temporary"] as const;
+const armorSlots = ["helmet", "body", "pants", "gloves", "boots"] as const;
+const filters: { value: InventoryFilter; label: string }[] = [
+  { value: "all", label: "Все" }, { value: "weapon", label: "Оружие" }, { value: "armor", label: "Броня" },
+  { value: "ammunition", label: "Боеприпасы" }, { value: "consumable", label: "Расходники" },
+];
 
 export default function InventoryPage() {
   const router = useRouter();
@@ -27,6 +34,9 @@ export default function InventoryPage() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [message, setMessage] = useState<ActionResult | null>(null);
   const [error, setError] = useState("");
+  const [filter, setFilter] = useState<InventoryFilter>("all");
+
+  const visibleItems = useMemo(() => items.filter((item) => filter === "all" || item.type === filter), [filter, items]);
 
   const loadData = useCallback(async () => {
     const inventoryResponse = await fetch(`${API_URL}/api/game/inventory`, { credentials: "include" });
@@ -66,25 +76,36 @@ export default function InventoryPage() {
       <p className="eyebrow game-eyebrow">Снаряжение</p><h1 className="game-title">Инвентарь</h1>
       {message && <p className={message.succeeded ? "action-result success" : "action-result failure"}>{message.message}</p>}
       {error && <p className="form-error">{error}</p>}
-      <div className="item-grid">
+
+      <EquipmentSection title="Одетое оружие" slots={weaponSlots} items={items} busy={busyKey !== null} onUnequip={(slot) => void perform("/api/game/inventory/unequip", "item_unequip", { slot }, slot)} />
+      <EquipmentSection title="Одетая броня" slots={armorSlots} items={items} busy={busyKey !== null} onUnequip={(slot) => void perform("/api/game/inventory/unequip", "item_unequip", { slot }, slot)} />
+
+      <h2 className="section-title inventory-section-title">Все вещи</h2>
+      <div className="inventory-filters" role="group" aria-label="Фильтр инвентаря">
+        {filters.map((entry) => <button className={filter === entry.value ? "active" : ""} type="button" key={entry.value} onClick={() => setFilter(entry.value)}>{entry.label}</button>)}
+      </div>
+      <div className="inventory-grid">
         {items.length === 0 && <p className="field-hint">Инвентарь пуст. Предметы можно купить в магазине.</p>}
-        {items.map((item) => {
+        {items.length > 0 && visibleItems.length === 0 && <p className="field-hint">В этой категории вещей нет.</p>}
+        {visibleItems.map((item) => {
           const key = item.instanceId ?? item.itemId;
           const slots = item.allowedSlots.split(",").filter(Boolean);
-          return <article className="item-card" key={key}>
-            <div><h2>{item.name}</h2><p>{item.description}</p></div>
-            {item.type === "ammunition" ? <><strong>В наличии: {item.quantity}</strong><p className="field-hint">Калибр: {item.caliber}</p></> : item.type === "consumable" ? <>
-              <strong>В наличии: {item.quantity}</strong>
-              <label>Использовать<input type="number" min="1" max={Math.min(100, item.quantity)} value={quantities[item.itemId] ?? 1} onChange={(event) => setQuantities((current) => ({ ...current, [item.itemId]: Number(event.target.value) }))} /></label>
-              <button className="primary-button" type="button" onClick={() => void useItem(item)} disabled={busyKey !== null}>{busyKey === item.itemId ? "Использование…" : "Использовать"}</button>
-            </> : <>
-              <strong>{item.type === "weapon" ? `Урон ${item.damage} · Точность ${item.accuracy}` : `Броня ${item.armor}`}</strong>
-              {item.type === "armor" && <p className="field-hint">Покрытие: {formatCoverage(item.armorCoverage)}</p>}
-              {item.equippedSlot && <p className="action-result success">Надето: {slotNames[item.equippedSlot]}</p>}
+          return <article className="inventory-card" key={key}>
+            <div className={`inventory-item-icon ${item.type}`} aria-hidden="true">{typeIcon(item.type)}</div>
+            <div className="inventory-card-body"><div className="inventory-card-heading"><h2>{item.name}</h2><strong>{item.type === "weapon" ? `Урон ${item.damage} · Точность ${item.accuracy}` : item.type === "armor" ? `Броня ${item.armor}` : `В наличии: ${item.quantity}`}</strong></div><p>{item.description}</p>
+            {item.type === "ammunition" ? <p className="inventory-meta">Калибр: {item.caliber}</p> : item.type === "consumable" ? <div className="inventory-consume">
+              <label><span>Количество</span><input type="number" min="1" max={Math.min(100, item.quantity)} value={quantities[item.itemId] ?? 1} onChange={(event) => setQuantities((current) => ({ ...current, [item.itemId]: Number(event.target.value) }))} /></label>
+              <button className="primary-button compact-action" type="button" onClick={() => void useItem(item)} disabled={busyKey !== null}>{busyKey === item.itemId ? "Использование…" : "Использовать"}</button>
+            </div> : <>
+              {item.type === "armor" && <p className="inventory-meta">Покрытие: {formatCoverage(item.armorCoverage)}</p>}
+              <div className="inventory-card-actions">
+              {item.equippedSlot && <span className="equipped-badge">Надето: {slotNames[item.equippedSlot]}</span>}
               {item.equippedSlot ?
-                <button className="secondary-button" type="button" disabled={busyKey !== null} onClick={() => void perform("/api/game/inventory/unequip", "item_unequip", { slot: item.equippedSlot }, key)}>Снять</button> :
-                slots.map((slot) => <button className="primary-button" type="button" key={slot} disabled={busyKey !== null} onClick={() => void perform("/api/game/inventory/equip", "item_equip", { instanceId: item.instanceId, slot }, key)}>Экипировать: {slotNames[slot]}</button>)}
+                <button className="secondary-button compact-action" type="button" disabled={busyKey !== null} onClick={() => void perform("/api/game/inventory/unequip", "item_unequip", { slot: item.equippedSlot }, key)}>Снять</button> :
+                slots.map((slot) => <button className="primary-button compact-action" type="button" key={slot} disabled={busyKey !== null} onClick={() => void perform("/api/game/inventory/equip", "item_equip", { instanceId: item.instanceId, slot }, key)}>Надеть: {slotNames[slot]}</button>)}
+              </div>
             </>}
+            </div>
           </article>;
         })}
       </div>
@@ -93,8 +114,28 @@ export default function InventoryPage() {
   );
 }
 
+function EquipmentSection({ title, slots, items, busy, onUnequip }: Readonly<{ title: string; slots: readonly string[]; items: InventoryItem[]; busy: boolean; onUnequip: (slot: string) => void }>) {
+  return <section className="equipment-section" aria-label={title}>
+    <h2 className="section-title">{title}</h2>
+    <div className={`equipped-grid ${slots.length === 5 ? "armour" : "weapons"}`}>
+      {slots.map((slot) => {
+        const item = items.find((entry) => entry.equippedSlot === slot);
+        return <article className={`equipped-slot${item ? " filled" : ""}`} key={slot}>
+          <span>{slotNames[slot]}</span>
+          <div className={`equipment-silhouette ${item?.type ?? slot}`} aria-hidden="true">{item ? typeIcon(item.type) : "—"}</div>
+          <strong>{item?.name ?? "Пусто"}</strong>
+          {item && <small>{item.type === "weapon" ? `Урон ${item.damage} · Точность ${item.accuracy}` : `Броня ${item.armor}`}</small>}
+          {item && <button className="secondary-button equipment-remove" type="button" disabled={busy} onClick={() => onUnequip(slot)}>Снять</button>}
+        </article>;
+      })}
+    </div>
+  </section>;
+}
+
 function formatCoverage(value: string) {
   const labels: Record<string, string> = { head: "голова", throat: "горло", heart: "сердце", chest: "грудь", stomach: "живот", arms: "руки", hands: "кисти", groin: "пах", legs: "ноги", feet: "ступни" };
   try { return Object.entries(JSON.parse(value) as Record<string, number>).map(([part, percent]) => `${labels[part] ?? part} ${percent}%`).join(", "); }
   catch { return "нет данных"; }
 }
+
+function typeIcon(type: string) { return ({ weapon: "W", armor: "A", ammunition: "•", consumable: "+" } as Record<string, string>)[type] ?? "?"; }

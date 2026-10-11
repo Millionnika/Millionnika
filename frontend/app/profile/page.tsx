@@ -28,16 +28,9 @@ type Profile = {
   generalProgress: Progress;
   hackingProgress: Progress;
   huntingProgress: Progress;
-  equipment: EquippedItem[];
 };
 
 type Progress = { level: number; experience: number; currentLevelThreshold: number; nextLevelThreshold: number | null; isMaximum: boolean };
-type EquippedItem = { instanceId: string; slot: string; name: string; type: string; damage: number; accuracy: number; armor: number; armorCoverage: string };
-
-const equipmentSlots = [
-  ["primary", "Основное оружие"], ["secondary", "Вторичное оружие"], ["melee", "Ближний бой"], ["temporary", "Временное"],
-  ["helmet", "Голова"], ["body", "Корпус"], ["pants", "Ноги"], ["gloves", "Перчатки"], ["boots", "Обувь"],
-] as const;
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -111,14 +104,6 @@ export default function ProfilePage() {
           <Stat title="Ловкость" value={profile.dexterity} />
         </section>
 
-        <h2 className="section-title">Экипировка</h2>
-        <section className="stats-grid" aria-label="Экипировка">
-          {equipmentSlots.map(([slot, title]) => {
-            const item = profile.equipment.find((entry) => entry.slot === slot);
-            return <article className="stat-card" key={slot}><span>{title}</span><strong>{item?.name ?? "Пусто"}</strong>{item && <small>{item.type === "weapon" ? `Урон ${item.damage} · Точность ${item.accuracy}` : `Броня ${item.armor} · ${formatCoverage(item.armorCoverage)}`}</small>}</article>;
-          })}
-        </section>
-
       </section>
     </main>
   );
@@ -133,10 +118,4 @@ function ProgressCard({ title, progress }: Readonly<{ title: string; progress: P
 
 function Stat({ title, value }: Readonly<{ title: string; value: number }>) {
   return <article className="stat-card"><span>{title}</span><strong>{value}</strong></article>;
-}
-
-function formatCoverage(value: string) {
-  const labels: Record<string, string> = { head: "голова", throat: "горло", heart: "сердце", chest: "грудь", stomach: "живот", arms: "руки", hands: "кисти", groin: "пах", legs: "ноги", feet: "ступни" };
-  try { return Object.entries(JSON.parse(value) as Record<string, number>).map(([part, percent]) => `${labels[part] ?? part} ${percent}%`).join(", "); }
-  catch { return "покрытие не указано"; }
 }
