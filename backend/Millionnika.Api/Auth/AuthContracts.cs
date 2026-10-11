@@ -9,6 +9,7 @@ public sealed record AuthResponse(string Username, string Role);
 
 public sealed record ProfileResponse(
     string Username,
+    string Description,
     string Role,
     int Level,
     long Credits,

@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
+import { GameNav } from "@/components/GameNav";
 
 type Player = { id: string; username: string; email: string; role: string; isBlocked: boolean };
 type PlayerDetails = Player & {
@@ -101,7 +101,8 @@ export default function AdminPage() {
 
   return (
     <main><section className="admin-panel">
-      <header className="profile-header"><div><p className="eyebrow">Закрытый раздел</p><h1 className="admin-title">Админка</h1></div><Link className="secondary-button" href="/profile">Профиль</Link></header>
+      <GameNav />
+      <header className="profile-header"><div><p className="eyebrow">Закрытый раздел</p><h1 className="admin-title">Админка</h1></div></header>
       {message && <p className="action-result success">{message}</p>}
       {error && <p className="form-error">{error}</p>}
 

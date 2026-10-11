@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
+import { API_URL } from "@/lib/api";
 import { GameNav } from "@/components/GameNav";
 
 type Resource = {
@@ -14,6 +13,7 @@ type Resource = {
 
 type Profile = {
   username: string;
+  description: string;
   role: string;
   level: number;
   credits: number;
@@ -75,18 +75,6 @@ export default function ProfilePage() {
     return () => controller.abort();
   }, [loadProfile]);
 
-  async function logout() {
-    try {
-      const response = await fetch(`${API_URL}/api/auth/logout`, { method: "POST", credentials: "include" });
-      if (!response.ok && response.status !== 401) {
-        setError(await getErrorMessage(response));
-        return;
-      }
-      router.replace("/login");
-      router.refresh();
-    } catch { setError("Не удалось завершить сессию. Повторите выход после восстановления связи."); }
-  }
-
   if (error) {
     return <main><section className="auth-panel"><p className="form-error">{error}</p></section></main>;
   }
@@ -104,30 +92,9 @@ export default function ProfilePage() {
             <p className="eyebrow">Профиль игрока</p>
             <h1 className="profile-title">{profile.username}</h1>
             <p className="level">Уровень {profile.level} · Опыт {profile.experience}</p>
+            <p className="profile-description">{profile.description || "Описание пока не заполнено."}</p>
           </div>
-          <button className="secondary-button" type="button" onClick={logout}>Выйти</button>
         </header>
-
-        <section className="resource-grid" aria-label="Ресурсы">
-          <ResourceCard title="Кредиты" value={profile.credits.toLocaleString("ru-RU")} />
-          <ResourceCard
-            title="Энергия"
-            value={`${profile.energy.current} / ${profile.energy.maximum}`}
-            nextRecoveryAtUtc={profile.energy.nextRecoveryAtUtc}
-            onRecoveryElapsed={loadProfile}
-          />
-          <ResourceCard
-            title="Хладнокровие"
-            value={`${profile.nerve.current} / ${profile.nerve.maximum}`}
-            nextRecoveryAtUtc={profile.nerve.nextRecoveryAtUtc}
-            onRecoveryElapsed={loadProfile}
-          />
-          <ResourceCard
-            title="Здоровье"
-            value={`${profile.health.current} / ${profile.health.maximum}`}
-            recoveryDisabled
-          />
-        </section>
 
         <h2 className="section-title">Прогресс</h2>
         <section className="progress-grid" aria-label="Прогресс персонажа">
@@ -152,18 +119,6 @@ export default function ProfilePage() {
           })}
         </section>
 
-        <nav className="game-navigation" aria-label="Игровые действия">
-          <Link className="primary-button" href="/contracts">Контракты</Link>
-          <Link className="secondary-button" href="/activities">Активности</Link>
-          <Link className="secondary-button" href="/implant-center">Имплант-центр</Link>
-          <Link className="secondary-button" href="/shop">Магазин</Link>
-          <Link className="secondary-button" href="/inventory">Инвентарь</Link>
-          <Link className="secondary-button" href="/players">Игроки</Link>
-          <Link className="secondary-button" href="/friends">Друзья</Link>
-          {profile.role === "Admin" && <Link className="primary-button" href="/admin">Админка</Link>}
-        </nav>
-
-        <Link className="back-link profile-home-link" href="/">На главную</Link>
       </section>
     </main>
   );
@@ -176,63 +131,8 @@ function ProgressCard({ title, progress }: Readonly<{ title: string; progress: P
   return <article className="progress-card"><strong>{title}: {progress.level}</strong><span>{gained} / {required} до следующего уровня</span><progress value={gained} max={required} /></article>;
 }
 
-function ResourceCard({
-  title,
-  value,
-  nextRecoveryAtUtc,
-  recoveryDisabled = false,
-  onRecoveryElapsed,
-}: Readonly<{
-  title: string;
-  value: string | number;
-  nextRecoveryAtUtc?: string | null;
-  recoveryDisabled?: boolean;
-  onRecoveryElapsed?: () => void;
-}>) {
-  return (
-    <article className="resource-card">
-      <span>{title}</span>
-      <strong>{value}</strong>
-      {recoveryDisabled && <small>Автовосстановления нет</small>}
-      {nextRecoveryAtUtc === null && <small>Полностью восстановлено</small>}
-      {typeof nextRecoveryAtUtc === "string" && (
-        <RecoveryCountdown targetUtc={nextRecoveryAtUtc} onElapsed={onRecoveryElapsed} />
-      )}
-    </article>
-  );
-}
-
 function Stat({ title, value }: Readonly<{ title: string; value: number }>) {
   return <article className="stat-card"><span>{title}</span><strong>{value}</strong></article>;
-}
-
-function RecoveryCountdown({
-  targetUtc,
-  onElapsed,
-}: Readonly<{ targetUtc: string; onElapsed?: () => void }>) {
-  const [remainingSeconds, setRemainingSeconds] = useState(() => getRemainingSeconds(targetUtc));
-
-  useEffect(() => {
-    setRemainingSeconds(getRemainingSeconds(targetUtc));
-    const timer = window.setInterval(() => {
-      const remaining = getRemainingSeconds(targetUtc);
-      setRemainingSeconds(remaining);
-      if (remaining === 0) {
-        window.clearInterval(timer);
-        onElapsed?.();
-      }
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, [targetUtc, onElapsed]);
-
-  const minutes = Math.floor(remainingSeconds / 60);
-  const seconds = remainingSeconds % 60;
-  return <small>До восстановления: {minutes}:{seconds.toString().padStart(2, "0")}</small>;
-}
-
-function getRemainingSeconds(targetUtc: string) {
-  return Math.max(0, Math.ceil((new Date(targetUtc).getTime() - Date.now()) / 1000));
 }
 
 function formatCoverage(value: string) {

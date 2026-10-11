@@ -13,8 +13,6 @@ type InventoryItem = {
   armor: number; equippedSlot: string | null; allowedSlots: string; armorCoverage: string;
   caliber: string; clipSize: number; rateOfFireMin: number; rateOfFireMax: number;
 };
-type Resource = { current: number; maximum: number };
-type Profile = { energy: Resource; nerve: Resource; health: Resource };
 type ActionResult = { succeeded: boolean; message: string };
 
 const slotNames: Record<string, string> = {
@@ -25,21 +23,16 @@ const slotNames: Record<string, string> = {
 export default function InventoryPage() {
   const router = useRouter();
   const [items, setItems] = useState<InventoryItem[]>([]);
-  const [profile, setProfile] = useState<Profile | null>(null);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [message, setMessage] = useState<ActionResult | null>(null);
   const [error, setError] = useState("");
 
   const loadData = useCallback(async () => {
-    const [inventoryResponse, profileResponse] = await Promise.all([
-      fetch(`${API_URL}/api/game/inventory`, { credentials: "include" }),
-      fetch(`${API_URL}/api/profile`, { credentials: "include" }),
-    ]);
-    if (inventoryResponse.status === 401 || profileResponse.status === 401) { router.replace("/login"); return; }
-    if (!inventoryResponse.ok || !profileResponse.ok) throw new Error("Inventory request failed");
+    const inventoryResponse = await fetch(`${API_URL}/api/game/inventory`, { credentials: "include" });
+    if (inventoryResponse.status === 401) { router.replace("/login"); return; }
+    if (!inventoryResponse.ok) throw new Error("Inventory request failed");
     setItems((await inventoryResponse.json()) as InventoryItem[]);
-    setProfile((await profileResponse.json()) as Profile);
   }, [router]);
 
   useEffect(() => { void loadData().catch(() => setError("Не удалось загрузить инвентарь.")); }, [loadData]);
@@ -71,7 +64,6 @@ export default function InventoryPage() {
     <main><section className="game-panel shop-panel">
       <GameNav /><Link className="back-link" href="/profile">← Профиль</Link>
       <p className="eyebrow game-eyebrow">Снаряжение</p><h1 className="game-title">Инвентарь</h1>
-      {profile && <div className="inventory-resources"><span>Энергия <strong>{profile.energy.current}/{profile.energy.maximum}</strong></span><span>Хладнокровие <strong>{profile.nerve.current}/{profile.nerve.maximum}</strong></span><span>Здоровье <strong>{profile.health.current}/{profile.health.maximum}</strong></span></div>}
       {message && <p className={message.succeeded ? "action-result success" : "action-result failure"}>{message.message}</p>}
       {error && <p className="form-error">{error}</p>}
       <div className="item-grid">

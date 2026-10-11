@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
+import { GameNav } from "@/components/GameNav";
 
 type PublicProfile = {
   id: string; username: string; level: number; registeredAtUtc: string; description: string; canEdit: boolean;
@@ -64,6 +65,7 @@ export default function PublicPlayerPage() {
   }
 
   return <main><section className="game-panel public-profile-panel">
+    <GameNav />
     <Link className="back-link" href="/players">← Поиск игроков</Link>
     {error && !profile && <p className="form-error public-profile-error">{error}</p>}
     {profile && <>

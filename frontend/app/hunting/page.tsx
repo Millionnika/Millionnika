@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GameNav } from "@/components/GameNav";
-import { apiFetch, API_URL, getErrorMessage } from "@/lib/api";
+import { apiFetch, API_URL, getErrorMessage, publishPlayerState } from "@/lib/api";
 import { getPendingAction } from "@/lib/pendingAction";
 
 type Target = { id: string; name: string; description: string; minimumHuntingLevel: number; energyCost: number; health: number; rewardCredits: number; rewardExperience: number; rewardHuntingExperience: number; unlocked: boolean; lockedReason: string | null };
@@ -27,7 +27,9 @@ export default function HuntingPage() {
     if (locationsResponse.status === 401 || fightResponse.status === 401) { router.replace("/login"); return; }
     if (!locationsResponse.ok || (!fightResponse.ok && fightResponse.status !== 204)) throw new Error("load");
     setLocations(await locationsResponse.json() as Location[]);
-    setFight(fightResponse.status === 204 ? null : await fightResponse.json() as Fight);
+    const activeFight = fightResponse.status === 204 ? null : await fightResponse.json() as Fight;
+    setFight(activeFight);
+    if (activeFight) publishFightHealth(activeFight);
   }, [router]);
 
   useEffect(() => { void load().catch(() => setError("Не удалось загрузить охоту.")); }, [load]);
@@ -47,7 +49,7 @@ export default function HuntingPage() {
       received();
       if (response.status === 401) { router.replace("/login"); return; }
       if (!response.ok && response.status !== 409 && response.status !== 429) { setError(await getErrorMessage(response)); return; }
-      const result = await response.json() as Fight; setMessage(result.message);
+      const result = await response.json() as Fight; setMessage(result.message); publishFightHealth(result);
       if (result.errorCode === "compatible_ammo_missing" && result.requiredAmmoWeapon && result.requiredAmmoName)
         setMissingAmmo({ weapon: result.requiredAmmoWeapon, ammunition: result.requiredAmmoName });
       if (result.fightId !== "00000000-0000-0000-0000-000000000000") setFight(result);
@@ -74,6 +76,10 @@ export default function HuntingPage() {
       </section>)}
     </div>}
   </section></main>;
+}
+
+function publishFightHealth(fight: Fight) {
+  publishPlayerState({ fightActive: fight.status === "active", healthCurrent: fight.playerHealth, healthMaximum: fight.maximumPlayerHealth });
 }
 
 function FightPanel({ fight, busy, onTurn }: Readonly<{ fight: Fight; busy: boolean; onTurn: (action: "attack" | "reload", slot: string) => void }>) {

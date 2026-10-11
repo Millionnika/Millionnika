@@ -134,7 +134,7 @@ public sealed class AuthService(
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var account = await dbContext.Users.AsNoTracking()
             .Where(user => user.Id == userId)
-            .Select(user => new { user.Username, user.Role })
+            .Select(user => new { user.Username, user.Description, user.Role })
             .SingleOrDefaultAsync(cancellationToken);
 
         if (account is null)
@@ -162,6 +162,7 @@ public sealed class AuthService(
 
         return new ProfileResponse(
             account.Username,
+            account.Description,
             account.Role,
             character.Level,
             character.Credits,

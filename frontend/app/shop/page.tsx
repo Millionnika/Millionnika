@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiFetch as fetch, API_URL, getErrorMessage } from "@/lib/api";
 import { getPendingAction } from "@/lib/pendingAction";
 import { GameNav } from "@/components/GameNav";
@@ -28,6 +28,12 @@ type ShopItem = {
 
 type Profile = { credits: number };
 type ActionResult = { succeeded: boolean; message: string; credits: number };
+type Category = "all" | "weapon" | "armor" | "ammunition" | "consumable";
+
+const categories: { value: Category; label: string }[] = [
+  { value: "all", label: "Всё" }, { value: "weapon", label: "Оружие" }, { value: "armor", label: "Броня" },
+  { value: "ammunition", label: "Боеприпасы" }, { value: "consumable", label: "Расходники" },
+];
 
 export default function ShopPage() {
   const router = useRouter();
@@ -37,6 +43,13 @@ export default function ShopPage() {
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [message, setMessage] = useState<ActionResult | null>(null);
   const [error, setError] = useState("");
+  const [category, setCategory] = useState<Category>("all");
+  const [query, setQuery] = useState("");
+
+  const visibleItems = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase("ru-RU");
+    return items.filter((item) => (category === "all" || item.type === category) && (!normalized || item.name.toLocaleLowerCase("ru-RU").includes(normalized)));
+  }, [category, items, query]);
 
   useEffect(() => {
     Promise.all([
@@ -99,25 +112,33 @@ export default function ShopPage() {
         <Link className="back-link" href="/profile">← Профиль</Link>
         <p className="eyebrow game-eyebrow">Магазин NPC</p>
         <h1 className="game-title">Технолавка</h1>
-        <p className="lead compact-lead">Кредиты: <strong>{credits?.toLocaleString("ru-RU") ?? "…"}</strong></p>
+        <p className="lead compact-lead">Доступно: <strong>{credits?.toLocaleString("ru-RU") ?? "…"} кредитов</strong></p>
+
+        <div className="shop-tools">
+          <div className="shop-categories" role="group" aria-label="Категория товаров">
+            {categories.map((entry) => <button className={category === entry.value ? "active" : ""} type="button" key={entry.value} onClick={() => setCategory(entry.value)}>{entry.label}</button>)}
+          </div>
+          <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по названию" aria-label="Поиск товара" />
+        </div>
 
         {message && <p className={message.succeeded ? "action-result success" : "action-result failure"}>{message.message}</p>}
         {error && <p className="form-error">{error}</p>}
 
         <div className="item-grid">
-          {items.map((item) => (
+          {visibleItems.length === 0 && <p className="field-hint">По этому запросу товаров нет.</p>}
+          {visibleItems.map((item) => (
             <article className="item-card" key={item.id}>
-              <div>
-                <h2>{item.name}</h2>
-                <p>{item.description}</p>
-                {item.type === "weapon" && <p className="field-hint">Урон {formatRange(item.minimumDamage, item.maximumDamage)} · Точность {formatRange(item.minimumAccuracy, item.maximumAccuracy)}</p>}
-                {item.type === "weapon" && item.clipSize > 0 && <p className="field-hint">Калибр {item.caliber} · магазин {item.clipSize} · выстрелов за ход {item.rateOfFireMin}–{item.rateOfFireMax}</p>}
-                {item.type === "ammunition" && <p className="field-hint">Боеприпас · калибр {item.caliber}</p>}
-                {item.type === "armor" && <p className="field-hint">Броня {formatRange(item.minimumArmor, item.maximumArmor)} · Слот: {slotName(item.allowedSlots)} · Покрытие: {formatCoverage(item.armorCoverage)}</p>}
+              <div className={`item-icon ${item.type}`} aria-hidden="true">{typeIcon(item.type)}</div>
+              <div className="item-card-content">
+                <div className="item-card-heading"><h2>{item.name}</h2><strong>{item.price.toLocaleString("ru-RU")} ₡</strong></div>
+                {item.type === "weapon" && <p className="item-stats">Урон {formatRange(item.minimumDamage, item.maximumDamage)} · Точность {formatRange(item.minimumAccuracy, item.maximumAccuracy)}</p>}
+                {item.type === "weapon" && item.clipSize > 0 && <p className="item-stats">Калибр {item.caliber} · Боеприпасы: {compatibleAmmo(items, item.caliber)}</p>}
+                {item.type === "ammunition" && <p className="item-stats">Боеприпасы · калибр {item.caliber}</p>}
+                {item.type === "armor" && <p className="item-stats">Броня {formatRange(item.minimumArmor, item.maximumArmor)} · {slotName(item.allowedSlots)}</p>}
+                {item.type === "consumable" && <p className="item-stats">{resourceName(item.effectResource)} +{item.effectAmount}</p>}
+                <details><summary>Описание и параметры</summary><p>{item.description}</p>{item.type === "weapon" && item.clipSize > 0 && <p>Магазин {item.clipSize} · выстрелов за ход {item.rateOfFireMin}–{item.rateOfFireMax}</p>}{item.type === "armor" && <p>Покрытие: {formatCoverage(item.armorCoverage)}</p>}</details>
               </div>
-              <strong>{item.price} кредитов</strong>
-              <label>
-                Количество
+              <div className="item-purchase"><label><span>Количество</span>
                 <input
                   type="number"
                   min="1"
@@ -131,7 +152,7 @@ export default function ShopPage() {
               </label>
               <button className="primary-button" type="button" onClick={() => buy(item)} disabled={busyItemId !== null}>
                 {busyItemId === item.id ? "Покупка…" : "Купить"}
-              </button>
+              </button></div>
             </article>
           ))}
         </div>
@@ -155,3 +176,10 @@ function formatCoverage(value: string) {
   try { return Object.entries(JSON.parse(value) as Record<string, number>).map(([part, percent]) => `${labels[part] ?? part} ${percent}%`).join(", "); }
   catch { return "нет данных"; }
 }
+
+function compatibleAmmo(items: ShopItem[], caliber: string) {
+  return items.filter((item) => item.type === "ammunition" && item.caliber === caliber).map((item) => item.name).join(", ") || "нет в продаже";
+}
+
+function typeIcon(type: string) { return ({ weapon: "W", armor: "A", ammunition: "•", consumable: "+" } as Record<string, string>)[type] ?? "?"; }
+function resourceName(resource: string) { return ({ energy: "Энергия", nerve: "Хладнокровие", health: "Здоровье" } as Record<string, string>)[resource] ?? "Ресурс"; }

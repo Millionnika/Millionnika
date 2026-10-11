@@ -1,4 +1,18 @@
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5080";
+export const PLAYER_STATE_EVENT = "millionnika:player-state";
+
+export type PlayerStateEventDetail = {
+  healthCurrent?: number;
+  healthMaximum?: number;
+  fightActive?: boolean;
+  clear?: boolean;
+};
+
+export function publishPlayerState(detail: PlayerStateEventDetail = {}) {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(PLAYER_STATE_EVENT, { detail }));
+  }
+}
 
 let pendingCsrf: Promise<Response> | null = null;
 
@@ -19,7 +33,11 @@ export async function apiFetch(url: string, init: RequestInit = {}): Promise<Res
   const { token } = await tokenResponse.json() as { token: string };
   const headers = new Headers(init.headers);
   headers.set("X-CSRF-Token", token);
-  return fetch(url, { ...init, headers, credentials: "include" });
+  const response = await fetch(url, { ...init, headers, credentials: "include" });
+  if (response.ok || response.status === 409 || response.status === 429) {
+    publishPlayerState(url.endsWith("/api/auth/logout") ? { clear: true } : {});
+  }
+  return response;
 }
 
 export type ValidationProblem = {
