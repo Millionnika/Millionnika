@@ -10,13 +10,14 @@ import { getPendingAction } from "@/lib/pendingAction";
 type Target = { id: string; name: string; description: string; minimumHuntingLevel: number; energyCost: number; health: number; rewardCredits: number; rewardExperience: number; rewardHuntingExperience: number; unlocked: boolean; lockedReason: string | null };
 type Location = { id: string; name: string; description: string; minimumHuntingLevel: number; unlocked: boolean; targets: Target[] };
 type Weapon = { slot: string; name: string; ammoInClip: number; reserveAmmo: number; clipSize: number };
-type Fight = { fightId: string; replayed: boolean; status: string; turn: number; maximumTurns: number; playerHealth: number; maximumPlayerHealth: number; robotHealth: number; maximumRobotHealth: number; expiresAtUtc: string; nextActionAtUtc: string | null; message: string; log: string[]; weapons: Weapon[]; creditsAwarded: number; experienceAwarded: number; huntingExperienceAwarded: number; huntingLevel: number; energy: number; levelIncreased: boolean };
+type Fight = { fightId: string; replayed: boolean; status: string; turn: number; maximumTurns: number; playerHealth: number; maximumPlayerHealth: number; robotHealth: number; maximumRobotHealth: number; expiresAtUtc: string; nextActionAtUtc: string | null; message: string; log: string[]; weapons: Weapon[]; creditsAwarded: number; experienceAwarded: number; huntingExperienceAwarded: number; huntingLevel: number; energy: number; levelIncreased: boolean; errorCode: string | null; requiredAmmoWeapon: string | null; requiredAmmoName: string | null };
 
 export default function HuntingPage() {
   const router = useRouter();
   const [locations, setLocations] = useState<Location[]>([]);
   const [fight, setFight] = useState<Fight | null>(null);
   const [message, setMessage] = useState(""); const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
+  const [missingAmmo, setMissingAmmo] = useState<{ weapon: string; ammunition: string } | null>(null);
 
   const load = useCallback(async () => {
     const [locationsResponse, fightResponse] = await Promise.all([
@@ -40,13 +41,15 @@ export default function HuntingPage() {
     await mutate("/api/game/hunting/turn", { requestId: pending.requestId, action, slot }, pending.receivedResponse);
   }
   async function mutate(path: string, body: object, received: () => void) {
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setMissingAmmo(null);
     try {
       const response = await apiFetch(`${API_URL}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(body) });
       received();
       if (response.status === 401) { router.replace("/login"); return; }
       if (!response.ok && response.status !== 409 && response.status !== 429) { setError(await getErrorMessage(response)); return; }
       const result = await response.json() as Fight; setMessage(result.message);
+      if (result.errorCode === "compatible_ammo_missing" && result.requiredAmmoWeapon && result.requiredAmmoName)
+        setMissingAmmo({ weapon: result.requiredAmmoWeapon, ammunition: result.requiredAmmoName });
       if (result.fightId !== "00000000-0000-0000-0000-000000000000") setFight(result);
       if (result.status !== "active") await load();
     } catch { setError("Ответ потерян. Повторите ту же кнопку: requestId сохранён безопасно."); }
@@ -56,7 +59,9 @@ export default function HuntingPage() {
   return <main><section className="game-panel">
     <GameNav /><Link className="back-link" href="/activities">← Активности</Link>
     <p className="eyebrow game-eyebrow">Навык «Охота на роботов»</p><h1 className="game-title">Охота</h1>
-    {message && <p className="action-result success">{message}</p>}{error && <p className="form-error">{error}</p>}
+    {message && <p className="action-result success">{message}</p>}
+    {missingAmmo && <p className="form-error">Оружие: {missingAmmo.weapon}. Нужны: {missingAmmo.ammunition}. <Link href="/shop">Перейти в магазин</Link></p>}
+    {error && <p className="form-error">{error}</p>}
     {fight && fight.status !== "active" && <p className="action-result success">Последний бой: {fight.message} Здоровье {fight.playerHealth}/{fight.maximumPlayerHealth}. Награда: {fight.creditsAwarded} кредитов, {fight.experienceAwarded} общего опыта, {fight.huntingExperienceAwarded} опыта охоты.</p>}
     {fight?.status === "active" ? <FightPanel fight={fight} busy={busy} onTurn={turn} /> : <div className="hunting-locations">
       {locations.map((location) => <section className={`hunting-location${location.unlocked ? "" : " locked"}`} key={location.id}>

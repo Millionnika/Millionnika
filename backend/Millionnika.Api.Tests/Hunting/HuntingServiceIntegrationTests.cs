@@ -16,7 +16,48 @@ namespace Millionnika.Api.Tests.Hunting;
 public sealed class HuntingServiceIntegrationTests
 {
     private static readonly Guid TargetId = Guid.Parse("55555555-5555-5555-5555-555555555001");
+    private static readonly Guid PrimaryId = Guid.Parse("22222222-2222-2222-2222-222222222001");
     private static readonly Guid MeleeId = Guid.Parse("22222222-2222-2222-2222-222222222003");
+
+    [Fact]
+    public async Task Start_DistinguishesMissingWeaponFromMissingCompatibleAmmunition()
+    {
+        var noWeapon = CreateUser();
+        var noAmmo = CreateUser();
+        await using (var setup = TestDatabase.CreateDbContext())
+        {
+            setup.Users.AddRange(noWeapon, noAmmo);
+            setup.EquipmentInstances.Add(new EquipmentInstance { Id = Guid.NewGuid(), CharacterId = noAmmo.Character!.Id,
+                ItemId = PrimaryId, Damage = 56, Accuracy = 52, EquippedSlot = EquipmentSlots.Primary, CreatedAtUtc = Clock.GetUtcNow() });
+            await setup.SaveChangesAsync();
+        }
+        try
+        {
+            await using (var db = TestDatabase.CreateDbContext())
+            {
+                var result = await Service(db).StartAsync(noWeapon.Id, new(Guid.NewGuid(), TargetId), default);
+                Assert.Equal(409, result.StatusCode);
+                Assert.Equal("weapon_not_equipped", result.Response.ErrorCode);
+                Assert.Contains("экипируйте оружие", result.Response.Message, StringComparison.OrdinalIgnoreCase);
+            }
+            await using (var db = TestDatabase.CreateDbContext())
+            {
+                var result = await Service(db).StartAsync(noAmmo.Id, new(Guid.NewGuid(), TargetId), default);
+                Assert.Equal(409, result.StatusCode);
+                Assert.Equal("compatible_ammo_missing", result.Response.ErrorCode);
+                Assert.Equal("Импульсный карабин", result.Response.RequiredAmmoWeapon);
+                Assert.Equal("Стандартный импульсный заряд", result.Response.RequiredAmmoName);
+            }
+            await using var verify = TestDatabase.CreateDbContext();
+            Assert.Equal(100, await verify.Characters.Where(value => value.Id == noWeapon.Character!.Id).Select(value => value.Energy).SingleAsync());
+            Assert.Equal(100, await verify.Characters.Where(value => value.Id == noAmmo.Character!.Id).Select(value => value.Energy).SingleAsync());
+        }
+        finally
+        {
+            await using var cleanup = TestDatabase.CreateDbContext();
+            await cleanup.Users.Where(value => value.Id == noWeapon.Id || value.Id == noAmmo.Id).ExecuteDeleteAsync();
+        }
+    }
 
     [Fact]
     public async Task StartAndTurn_AreIdempotentAndParallelTurnCannotSkipCooldown()

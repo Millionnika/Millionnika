@@ -103,9 +103,21 @@ public sealed class HuntingService(
             weapons.Add(new(instance.ItemId, ammo?.ItemId ?? Guid.Empty, instance.EquippedSlot!, item.Name, instance.Damage,
                 instance.Accuracy, item.Caliber, item.ClipSize, item.RateOfFireMin, item.RateOfFireMax, loaded, reserved - loaded));
         }
-        if (!weapons.Any(value => value.ClipSize == 0 || value.AmmoInClip > 0))
+        if (weapons.Count == 0)
             return await RejectAsync(transaction, character, request.RequestId, "start", signature,
-                "Экипируйте оружие и боеприпасы подходящего калибра.", 409, token);
+                "Перед охотой экипируйте оружие.", 409, token, errorCode: "weapon_not_equipped");
+        if (!weapons.Any(value => value.ClipSize == 0 || value.AmmoInClip > 0))
+        {
+            var firearm = weapons.First(value => value.ClipSize > 0);
+            var ammunitionName = await db.Items.AsNoTracking()
+                .Where(value => value.Type == ItemTypes.Ammunition && value.Caliber == firearm.Caliber)
+                .OrderByDescending(value => value.IsActive).ThenBy(value => value.Name)
+                .Select(value => value.Name).FirstOrDefaultAsync(token)
+                ?? $"Боеприпасы калибра {firearm.Caliber}";
+            return await RejectAsync(transaction, character, request.RequestId, "start", signature,
+                $"Для оружия «{firearm.Name}» нет подходящих патронов: «{ammunitionName}». Они берутся из инвентаря автоматически.",
+                409, token, "compatible_ammo_missing", firearm.Name, ammunitionName);
+        }
 
         var armor = equipment.Where(value => value.Item.Type == ItemTypes.Armor)
             .Select(value => new CombatArmor(value.Armor, ReadCoverage(value.Item.ArmorCoverage))).ToList();
@@ -296,9 +308,15 @@ public sealed class HuntingService(
     }
 
     private async Task<HuntingActionResult> RejectAsync(Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction,
-        GameCharacter character, Guid requestId, string action, string signature, string message, int code, CancellationToken token)
+        GameCharacter character, Guid requestId, string action, string signature, string message, int code, CancellationToken token,
+        string? errorCode = null, string? requiredAmmoWeapon = null, string? requiredAmmoName = null)
     {
-        var response = EmptyResponse(character, requestId, message);
+        var response = EmptyResponse(character, requestId, message) with
+        {
+            ErrorCode = errorCode,
+            RequiredAmmoWeapon = requiredAmmoWeapon,
+            RequiredAmmoName = requiredAmmoName
+        };
         AddReceipt(character.UserId, requestId, action, signature, response);
         await db.SaveChangesAsync(token); await transaction.CommitAsync(token);
         return new(response, code);

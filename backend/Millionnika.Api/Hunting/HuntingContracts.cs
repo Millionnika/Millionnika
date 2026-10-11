@@ -17,7 +17,8 @@ public sealed record HuntFightResponse(
     DateTimeOffset ExpiresAtUtc, DateTimeOffset? NextActionAtUtc, string Message,
     IReadOnlyList<string> Log, IReadOnlyList<HuntWeaponResponse> Weapons,
     long CreditsAwarded, long ExperienceAwarded, long HuntingExperienceAwarded,
-    int HuntingLevel, int Energy, bool LevelIncreased);
+    int HuntingLevel, int Energy, bool LevelIncreased,
+    string? ErrorCode = null, string? RequiredAmmoWeapon = null, string? RequiredAmmoName = null);
 public sealed record HuntingActionResult(HuntFightResponse Response, int StatusCode);
 
 internal sealed record HuntSnapshot(
