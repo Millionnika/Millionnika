@@ -212,14 +212,13 @@ input:focus, textarea:focus, select:focus { border-color: var(--teal); box-shado
 .hunting-locations { display: grid; gap: 20px; }
 .hunting-location { padding-top: 12px; }
 .hunting-location > p { color: var(--muted); }
-.battle-screen { margin-top: 20px; overflow: hidden; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface-soft); }
-.battle-summary { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); border-bottom: 1px solid #1d2c29; color: #fff; background: #2d3c39; }
+.battle-screen { margin-top: 20px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface-soft); }
+.battle-summary { display: grid; overflow: hidden; grid-template-columns: 1.4fr repeat(3, 1fr); border-bottom: 1px solid #1d2c29; border-radius: 7px 7px 0 0; color: #fff; background: #2d3c39; }
 .battle-summary > div { display: grid; gap: 2px; min-width: 0; padding: 10px 13px; border-right: 1px solid rgba(255,255,255,.11); }
 .battle-summary > div:last-child { border-right: 0; }
 .battle-summary span, .battle-section-heading span { color: #aebdb9; font-size: .68rem; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
 .battle-summary strong { overflow-wrap: anywhere; font-size: .86rem; }
 .battle-action-state strong { color: #83ded4; }
-.battle-screen.finished .battle-action-state strong { color: #d4dddb; }
 .battle-participants { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); background: linear-gradient(90deg, #f8faf9 0 49.9%, #edf1ef 50% 100%); }
 .battle-versus { position: absolute; z-index: 2; top: 50%; left: 50%; display: grid; width: 42px; height: 42px; place-items: center; transform: translate(-50%, -50%); border: 3px solid #fff; border-radius: 50%; color: #fff; background: #34423f; box-shadow: 0 2px 10px rgba(31,43,40,.18); font-size: .72rem; font-weight: 900; }
 .battle-combatant { display: grid; min-width: 0; grid-template-rows: auto auto 400px auto; gap: 8px; padding: 14px 14px 13px; }
@@ -261,11 +260,25 @@ input:focus, textarea:focus, select:focus { border-color: var(--teal); box-shado
 .combatant-slot > b { width: 100%; overflow: hidden; color: var(--teal-dark); font-size: .64rem; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
 .battle-combatant.opponent .combatant-slot.filled > b { color: #8e383e; }
 .combatant-slot.empty { background: rgba(244,247,246,.65); }
-.combatant-slot.empty > b { color: #98a6a2; font-weight: 650; }
-.natural-protection { display: grid; gap: 2px; max-width: 150px; padding: 5px 8px; border: 1px dashed #c8a16e; border-radius: 4px; color: #765224; background: #fff7e9; text-align: center; }
-.natural-protection span { font-size: .57rem; line-height: 1.2; text-transform: uppercase; }
+.combatant-slot.empty > b { color: #98a6a2; font-size: .58rem; font-weight: 650; white-space: normal; }
+.player-weapon-slot { grid-template-rows: minmax(0, 1fr) auto; padding: 0; }
+.weapon-slot-attack { display: grid; width: 100%; min-width: 0; min-height: 0; grid-template-columns: 30px minmax(0, 1fr); grid-template-rows: auto auto auto; gap: 1px 5px; align-items: center; padding: 4px 5px; border: 0; color: inherit; background: transparent; cursor: pointer; text-align: left; }
+.weapon-slot-attack > span { grid-column: 1 / -1; overflow: hidden; color: var(--muted); font-size: .56rem; text-overflow: ellipsis; white-space: nowrap; }
+.weapon-slot-attack > i { grid-row: 2 / span 2; display: grid; width: 30px; height: 26px; place-items: center; border-radius: 4px; color: var(--teal-dark); background: var(--teal-soft); font-size: .66rem; font-style: normal; font-weight: 850; }
+.weapon-slot-attack > b { min-width: 0; overflow: hidden; color: var(--teal-dark); font-size: .62rem; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
+.weapon-slot-attack > small { color: var(--muted); font-size: .55rem; white-space: nowrap; }
+.weapon-slot-attack > em { grid-column: 1 / -1; overflow: hidden; color: #9d3038; font-size: .52rem; font-style: normal; line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
+.weapon-slot-attack:disabled { cursor: not-allowed; }
+.weapon-slot-attack:focus-visible, .slot-reload:focus-visible { outline: 2px solid var(--teal); outline-offset: -2px; }
+.slot-reload { width: 100%; min-height: 22px; padding: 2px 4px; border: 0; border-top: 1px solid var(--border); color: var(--teal-dark); background: #edf8f6; font-size: .55rem; font-weight: 750; cursor: pointer; }
+.slot-reload:disabled { color: #91a09c; background: #f3f5f4; cursor: not-allowed; }
+.player-weapon-slot.future .weapon-slot-attack > i { color: #786648; background: #f6f0e4; }
+.natural-protection { display: flex; gap: 4px; max-width: 170px; padding: 5px 8px; border: 1px dashed #c8a16e; border-radius: 4px; color: #765224; background: #fff7e9; text-align: center; }
+.natural-protection span { font-size: .57rem; line-height: 1.2; }
 .natural-protection strong { font-size: .67rem; }
-.battle-loadout, .battle-log, .battle-roster { padding: 14px; border-top: 1px solid var(--border); background: var(--surface); }
+.battle-lower { display: grid; min-width: 0; grid-template-columns: minmax(0, 7fr) minmax(250px, 3fr); gap: 14px; padding: 14px; border-top: 1px solid var(--border); }
+.battle-log, .battle-roster { padding: 14px; background: var(--surface); }
+.battle-log, .battle-roster { overflow: hidden; border: 1px solid var(--border); border-radius: 7px; }
 .battle-section-heading { display: flex; align-items: end; justify-content: space-between; gap: 14px; margin-bottom: 10px; }
 .battle-section-heading h2 { margin: 2px 0 0; font-size: 1rem; }
 .battle-section-heading > small { color: var(--muted); font-size: .75rem; text-align: right; }
@@ -284,25 +297,40 @@ input:focus, textarea:focus, select:focus { border-color: var(--teal); box-shado
 .battle-action-note.error { color: #9d3038; }
 .battle-weapon-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
 .battle-weapon-actions button { min-height: 34px; padding: 0 11px; font-size: .78rem; }
-.battle-log ol { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-.battle-log li { display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: start; background: var(--surface-soft); }
+.battle-log { padding: 0; }
+.battle-log > summary { display: flex; min-height: 42px; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; cursor: pointer; font-size: .9rem; font-weight: 800; list-style: none; }
+.battle-log > summary::-webkit-details-marker { display: none; }
+.battle-log > summary small { display: grid; min-width: 24px; height: 24px; place-items: center; border-radius: 12px; color: var(--muted); background: var(--surface-soft); font-size: .72rem; }
+.battle-log ol { display: grid; max-height: 260px; gap: 1px; margin: 0; padding: 0; overflow-y: auto; list-style: none; border-top: 1px solid var(--border); }
+.battle-log li { position: relative; display: grid; min-height: 42px; grid-template-columns: 48px minmax(0, 1fr); align-items: center; background: var(--surface-soft); }
 .battle-log li:nth-child(even) { background: #fff; }
-.battle-log li > span { align-self: stretch; display: grid; place-items: center; border-right: 1px solid var(--border); color: var(--muted); font-size: .7rem; font-weight: 750; }
-.battle-log p { margin: 0; padding: 8px 10px; line-height: 1.4; }
+.battle-log li::before { position: absolute; inset: 0 auto 0 0; width: 3px; content: ""; background: #aeb9b6; }
+.battle-log li.player::before { background: var(--teal); }
+.battle-log li.opponent::before { background: var(--red); }
+.battle-log li > span { align-self: stretch; display: grid; place-items: center; border-right: 1px solid var(--border); color: var(--muted); font-size: 12px; font-weight: 750; }
+.battle-log p { margin: 0; padding: 7px 9px; font-size: 14px; line-height: 1.3; }
 .battle-log-empty { margin: 0; padding: 12px; border: 1px dashed var(--border-strong); border-radius: 6px; color: var(--muted); text-align: center; }
-.battle-roster-sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.battle-roster-side { min-width: 0; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-soft); }
-.battle-roster-side h3 { margin: 0 0 7px; color: var(--muted); font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; }
-.battle-roster-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 7px; }
-.battle-roster-list article { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px; align-items: center; min-width: 0; padding: 7px; border: 1px solid var(--border); border-radius: 5px; background: #fff; }
+.battle-roster-list { display: grid; max-height: 300px; gap: 6px; overflow-y: auto; }
+.battle-roster-list article { display: grid; min-height: 62px; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 8px; align-items: center; min-width: 0; padding: 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface-soft); }
 .roster-avatar { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 50%; color: #fff; background: var(--teal-dark); font-size: .78rem; font-weight: 850; }
-.battle-roster-side:last-child .roster-avatar { background: #8e383e; }
+.battle-roster-list article.opponent .roster-avatar { background: #8e383e; }
 .battle-roster-list article > div:last-child { display: grid; min-width: 0; gap: 2px; }
 .battle-roster-list strong { overflow: hidden; font-size: .8rem; text-overflow: ellipsis; white-space: nowrap; }
 .battle-roster-list span { color: var(--muted); font-size: .66rem; }
+.battle-roster-list article > b { color: var(--muted); font-size: .7rem; white-space: nowrap; }
 .roster-health { height: 4px; overflow: hidden; border-radius: 2px; background: #dce3e0; }
 .roster-health i { display: block; height: 100%; border-radius: inherit; background: var(--teal); }
-.battle-roster-side:last-child .roster-health i { background: var(--red); }
+.battle-roster-list article.opponent .roster-health i { background: var(--red); }
+.battle-result-card { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(320px, 1fr) auto; gap: 18px; align-items: center; margin-top: 20px; padding: 18px; border: 1px solid var(--border-strong); border-left: 4px solid #9c565a; border-radius: 8px; background: var(--surface-soft); }
+.battle-result-card.won { border-left-color: var(--teal); }
+.battle-result-card > div > span { color: var(--muted); font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.battle-result-card h2 { margin: 2px 0 4px; font-size: 1.35rem; }
+.battle-result-card p { margin: 0; color: var(--muted); font-size: .85rem; }
+.battle-result-card dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 0; }
+.battle-result-card dl > div { display: grid; gap: 1px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 5px; background: #fff; }
+.battle-result-card dt { color: var(--muted); font-size: .68rem; }
+.battle-result-card dd { margin: 0; font-size: .82rem; font-weight: 800; }
+.battle-result-card > button { white-space: nowrap; }
 .battle-loading { display: flex; align-items: center; gap: 9px; margin-top: 18px; padding: 14px; border: 1px solid var(--border); border-radius: 7px; color: var(--muted); background: var(--surface-soft); }
 .battle-loading span { width: 18px; height: 18px; border: 2px solid var(--border-strong); border-top-color: var(--teal); border-radius: 50%; animation: battle-spin .7s linear infinite; }
 @keyframes battle-spin { to { transform: rotate(360deg); } }
@@ -388,9 +416,15 @@ input:focus, textarea:focus, select:focus { border-color: var(--teal); box-shado
   .combatant-equipment > strong { grid-column: 1 / -1; justify-self: start; }
   .combatant-equipment.armour .combatant-slot, .combatant-equipment.weapons .combatant-slot { max-width: none; min-height: 68px; }
   .combatant-slot > i { height: 28px; }
+  .player-weapon-slot { min-height: 96px !important; }
+  .weapon-slot-attack > b { font-size: .68rem; }
+  .weapon-slot-attack > small, .weapon-slot-attack > em, .slot-reload { font-size: .6rem; }
   .battle-versus { position: static; z-index: 2; margin: -17px auto; transform: none; width: 34px; height: 34px; border-width: 2px; }
-  .battle-weapons { grid-template-columns: 1fr; }
-  .battle-roster-sides { grid-template-columns: 1fr; }
+  .battle-lower { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 10px; }
+  .battle-log ol { max-height: 240px; }
+  .battle-result-card { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .battle-result-card dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .battle-result-card > button { width: 100%; }
 }
 
 @media (max-width: 410px) {
@@ -401,7 +435,8 @@ input:focus, textarea:focus, select:focus { border-color: var(--teal); box-shado
   .item-purchase { grid-template-columns: 82px 1fr; }
   .inventory-card-heading { align-items: flex-start; flex-direction: column; gap: 3px; }
   .inventory-consume { align-items: stretch; }
-  .battle-loadout, .battle-log, .battle-roster { padding: 11px; }
+  .battle-roster { padding: 11px; }
+  .battle-log { padding: 0; }
   .battle-section-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
   .battle-section-heading > small { text-align: left; }
   .battle-weapon-card { grid-template-columns: 38px minmax(0, 1fr); }

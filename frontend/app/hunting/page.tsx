@@ -10,7 +10,7 @@ import { getPendingAction } from "@/lib/pendingAction";
 
 type Target = { id: string; name: string; description: string; minimumHuntingLevel: number; energyCost: number; health: number; rewardCredits: number; rewardExperience: number; rewardHuntingExperience: number; unlocked: boolean; lockedReason: string | null };
 type Location = { id: string; name: string; description: string; minimumHuntingLevel: number; unlocked: boolean; targets: Target[] };
-type Fight = { fightId: string; replayed: boolean; status: string; turn: number; maximumTurns: number; playerHealth: number; maximumPlayerHealth: number; robotHealth: number; maximumRobotHealth: number; expiresAtUtc: string; nextActionAtUtc: string | null; message: string; log: string[]; weapons: BattleWeapon[]; participants: BattleParticipant[]; playerEquipment: BattleEquipment[]; robotEquipment: BattleEquipment[]; robotProtection: BattleProtection[]; creditsAwarded: number; experienceAwarded: number; huntingExperienceAwarded: number; huntingLevel: number; energy: number; levelIncreased: boolean; errorCode: string | null; requiredAmmoWeapon: string | null; requiredAmmoName: string | null };
+type Fight = { fightId: string; replayed: boolean; status: string; turn: number; maximumTurns: number; playerHealth: number; maximumPlayerHealth: number; robotHealth: number; maximumRobotHealth: number; expiresAtUtc: string; nextActionAtUtc: string | null; message: string; log: string[]; weapons: BattleWeapon[]; participants?: BattleParticipant[]; playerEquipment?: BattleEquipment[]; robotEquipment?: BattleEquipment[]; robotProtection?: BattleProtection[]; creditsAwarded: number; experienceAwarded: number; huntingExperienceAwarded: number; huntingLevel: number; energy: number; levelIncreased: boolean; errorCode: string | null; requiredAmmoWeapon: string | null; requiredAmmoName: string | null };
 
 export default function HuntingPage() {
   const router = useRouter();
@@ -73,22 +73,22 @@ export default function HuntingPage() {
   return <main><section className="game-panel">
     <GameNav /><Link className="back-link" href="/activities">← Активности</Link>
     <p className="eyebrow game-eyebrow">Навык «Охота на роботов»</p><h1 className="game-title">Охота</h1>
-    {message && <p className="action-result success">{message}</p>}
+    {message && (!fight || fight.status === "active") && <p className="action-result success">{message}</p>}
     {missingAmmo && <p className="form-error">Оружие: {missingAmmo.weapon}. Нужны: {missingAmmo.ammunition}. <Link href="/shop">Перейти в магазин</Link></p>}
     {error && <p className="form-error">{error}</p>}
-    {fight && fight.status !== "active" && <p className="action-result battle-result">Последний бой: {fight.message} Здоровье {fight.playerHealth}/{fight.maximumPlayerHealth}. Награда: {fight.creditsAwarded} кредитов, {fight.experienceAwarded} общего опыта, {fight.huntingExperienceAwarded} опыта охоты.</p>}
+    {fight && fight.status !== "active" && <BattleResult fight={fight} onReturn={() => { setFight(null); setMessage(""); }} />}
     {loading && <div className="battle-loading" role="status"><span />Загружаем данные боя…</div>}
-    {fight && <BattleScreen
+    {fight?.status === "active" && <BattleScreen
       status={fight.status} turn={fight.turn} maximumTurns={fight.maximumTurns}
       expiresAtUtc={fight.expiresAtUtc} nextActionAtUtc={fight.nextActionAtUtc}
       playerHealth={fight.playerHealth} maximumPlayerHealth={fight.maximumPlayerHealth}
       opponentHealth={fight.robotHealth} maximumOpponentHealth={fight.maximumRobotHealth}
-      participants={fight.participants ?? []} playerEquipment={fight.playerEquipment ?? []}
-      opponentEquipment={fight.robotEquipment ?? []} opponentProtection={fight.robotProtection ?? []}
+      participants={fight.participants} playerEquipment={fight.playerEquipment}
+      opponentEquipment={fight.robotEquipment} opponentProtection={fight.robotProtection}
       weapons={fight.weapons} log={fight.log} busy={busy}
       onAction={turn} onExpired={refreshExpiredFight}
     />}
-    {!loading && fight?.status !== "active" && <div className="hunting-locations">
+    {!loading && !fight && <div className="hunting-locations">
       {locations.map((location) => <section className={`hunting-location${location.unlocked ? "" : " locked"}`} key={location.id}>
         <h2>{location.name}</h2><p>{location.description}</p>
         {!location.unlocked && <p className="contract-lock">Откроется на уровне охоты {location.minimumHuntingLevel}</p>}
@@ -99,6 +99,20 @@ export default function HuntingPage() {
       </section>)}
     </div>}
   </section></main>;
+}
+
+function BattleResult({ fight, onReturn }: Readonly<{ fight: Fight; onReturn: () => void }>) {
+  const title = fight.status === "won" ? "Победа" : fight.status === "lost" ? "Поражение" : "Время боя истекло";
+  return <section className={`battle-result-card ${fight.status === "won" ? "won" : "ended"}`} aria-labelledby="battle-result-title">
+    <div><span>Бой завершён</span><h2 id="battle-result-title">{title}</h2><p>{fight.message}</p></div>
+    <dl>
+      <div><dt>Здоровье</dt><dd>{fight.playerHealth} / {fight.maximumPlayerHealth}</dd></div>
+      <div><dt>Кредиты</dt><dd>{fight.creditsAwarded}</dd></div>
+      <div><dt>Общий опыт</dt><dd>{fight.experienceAwarded}</dd></div>
+      <div><dt>Опыт охоты</dt><dd>{fight.huntingExperienceAwarded}</dd></div>
+    </dl>
+    <button className="primary-button" onClick={onReturn}>Вернуться к охоте</button>
+  </section>;
 }
 
 function publishFightHealth(fight: Fight) {
