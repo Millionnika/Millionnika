@@ -4,20 +4,28 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GameNav } from "@/components/GameNav";
+import { BattleScreen, type BattleWeapon } from "@/components/BattleScreen";
 import { apiFetch, API_URL, getErrorMessage, publishPlayerState } from "@/lib/api";
 import { getPendingAction } from "@/lib/pendingAction";
 
 type Target = { id: string; name: string; description: string; minimumHuntingLevel: number; energyCost: number; health: number; rewardCredits: number; rewardExperience: number; rewardHuntingExperience: number; unlocked: boolean; lockedReason: string | null };
 type Location = { id: string; name: string; description: string; minimumHuntingLevel: number; unlocked: boolean; targets: Target[] };
-type Weapon = { slot: string; name: string; ammoInClip: number; reserveAmmo: number; clipSize: number };
-type Fight = { fightId: string; replayed: boolean; status: string; turn: number; maximumTurns: number; playerHealth: number; maximumPlayerHealth: number; robotHealth: number; maximumRobotHealth: number; expiresAtUtc: string; nextActionAtUtc: string | null; message: string; log: string[]; weapons: Weapon[]; creditsAwarded: number; experienceAwarded: number; huntingExperienceAwarded: number; huntingLevel: number; energy: number; levelIncreased: boolean; errorCode: string | null; requiredAmmoWeapon: string | null; requiredAmmoName: string | null };
+type Fight = { fightId: string; replayed: boolean; status: string; turn: number; maximumTurns: number; playerHealth: number; maximumPlayerHealth: number; robotHealth: number; maximumRobotHealth: number; expiresAtUtc: string; nextActionAtUtc: string | null; message: string; log: string[]; weapons: BattleWeapon[]; creditsAwarded: number; experienceAwarded: number; huntingExperienceAwarded: number; huntingLevel: number; energy: number; levelIncreased: boolean; errorCode: string | null; requiredAmmoWeapon: string | null; requiredAmmoName: string | null };
 
 export default function HuntingPage() {
   const router = useRouter();
   const [locations, setLocations] = useState<Location[]>([]);
   const [fight, setFight] = useState<Fight | null>(null);
   const [message, setMessage] = useState(""); const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [missingAmmo, setMissingAmmo] = useState<{ weapon: string; ammunition: string } | null>(null);
+
+  const loadLocations = useCallback(async () => {
+    const response = await apiFetch(`${API_URL}/api/game/hunting/locations`, { credentials: "include" });
+    if (response.status === 401) { router.replace("/login"); return; }
+    if (!response.ok) throw new Error("locations");
+    setLocations(await response.json() as Location[]);
+  }, [router]);
 
   const load = useCallback(async () => {
     const [locationsResponse, fightResponse] = await Promise.all([
@@ -32,7 +40,7 @@ export default function HuntingPage() {
     if (activeFight) publishFightHealth(activeFight);
   }, [router]);
 
-  useEffect(() => { void load().catch(() => setError("Не удалось загрузить охоту.")); }, [load]);
+  useEffect(() => { void load().catch(() => setError("Не удалось загрузить охоту.")).finally(() => setLoading(false)); }, [load]);
 
   async function start(targetId: string) {
     const pending = getPendingAction("hunt_start", { targetId });
@@ -53,7 +61,7 @@ export default function HuntingPage() {
       if (result.errorCode === "compatible_ammo_missing" && result.requiredAmmoWeapon && result.requiredAmmoName)
         setMissingAmmo({ weapon: result.requiredAmmoWeapon, ammunition: result.requiredAmmoName });
       if (result.fightId !== "00000000-0000-0000-0000-000000000000") setFight(result);
-      if (result.status !== "active") await load();
+      if (result.status !== "active") await loadLocations();
     } catch { setError("Ответ потерян. Повторите ту же кнопку: requestId сохранён безопасно."); }
     finally { setBusy(false); }
   }
@@ -64,8 +72,16 @@ export default function HuntingPage() {
     {message && <p className="action-result success">{message}</p>}
     {missingAmmo && <p className="form-error">Оружие: {missingAmmo.weapon}. Нужны: {missingAmmo.ammunition}. <Link href="/shop">Перейти в магазин</Link></p>}
     {error && <p className="form-error">{error}</p>}
-    {fight && fight.status !== "active" && <p className="action-result success">Последний бой: {fight.message} Здоровье {fight.playerHealth}/{fight.maximumPlayerHealth}. Награда: {fight.creditsAwarded} кредитов, {fight.experienceAwarded} общего опыта, {fight.huntingExperienceAwarded} опыта охоты.</p>}
-    {fight?.status === "active" ? <FightPanel fight={fight} busy={busy} onTurn={turn} /> : <div className="hunting-locations">
+    {fight && fight.status !== "active" && <p className="action-result battle-result">Последний бой: {fight.message} Здоровье {fight.playerHealth}/{fight.maximumPlayerHealth}. Награда: {fight.creditsAwarded} кредитов, {fight.experienceAwarded} общего опыта, {fight.huntingExperienceAwarded} опыта охоты.</p>}
+    {loading && <div className="battle-loading" role="status"><span />Загружаем данные боя…</div>}
+    {fight && <BattleScreen
+      status={fight.status} turn={fight.turn} maximumTurns={fight.maximumTurns}
+      expiresAtUtc={fight.expiresAtUtc} nextActionAtUtc={fight.nextActionAtUtc}
+      playerHealth={fight.playerHealth} maximumPlayerHealth={fight.maximumPlayerHealth}
+      opponentHealth={fight.robotHealth} maximumOpponentHealth={fight.maximumRobotHealth}
+      weapons={fight.weapons} log={fight.log} busy={busy} onAction={turn}
+    />}
+    {!loading && fight?.status !== "active" && <div className="hunting-locations">
       {locations.map((location) => <section className={`hunting-location${location.unlocked ? "" : " locked"}`} key={location.id}>
         <h2>{location.name}</h2><p>{location.description}</p>
         {!location.unlocked && <p className="contract-lock">Откроется на уровне охоты {location.minimumHuntingLevel}</p>}
@@ -80,32 +96,4 @@ export default function HuntingPage() {
 
 function publishFightHealth(fight: Fight) {
   publishPlayerState({ fightActive: fight.status === "active", healthCurrent: fight.playerHealth, healthMaximum: fight.maximumPlayerHealth });
-}
-
-function FightPanel({ fight, busy, onTurn }: Readonly<{ fight: Fight; busy: boolean; onTurn: (action: "attack" | "reload", slot: string) => void }>) {
-  return <section className="fight-panel">
-    <div className="fight-health"><strong>Игрок: {fight.playerHealth}/{fight.maximumPlayerHealth}</strong><strong>Робот: {fight.robotHealth}/{fight.maximumRobotHealth}</strong><span>Ход {fight.turn}/{fight.maximumTurns}</span></div>
-    <div className="fight-weapons">{fight.weapons.map((weapon) => <WeaponActions key={weapon.slot} weapon={weapon} busy={busy} onTurn={onTurn} />)}</div>
-    <div className="action-log"><h2>Журнал</h2>{fight.log.slice().reverse().map((line, index) => <article key={`${index}-${line}`}><p>{line}</p></article>)}</div>
-  </section>;
-}
-
-function WeaponActions({ weapon, busy, onTurn }: Readonly<{ weapon: Weapon; busy: boolean; onTurn: (action: "attack" | "reload", slot: string) => void }>) {
-  const firearm = weapon.clipSize > 0;
-  const reloadReason = weapon.ammoInClip >= weapon.clipSize
-    ? "Магазин уже полный."
-    : weapon.reserveAmmo === 0 ? "Запас патронов пуст." : "";
-  const attackReason = firearm && weapon.ammoInClip === 0
-    ? "Магазин пуст — перезарядите оружие или выберите другое." : "";
-  return <article className="stat-card">
-    <span>{weapon.slot}</span><strong>{weapon.name}</strong>
-    <small>{firearm ? `В магазине: ${weapon.ammoInClip}/${weapon.clipSize} · Запас: ${weapon.reserveAmmo} патронов` : "Боеприпасы не нужны"}</small>
-    {firearm && <small className="field-hint">Запас указан в патронах, не в магазинах.</small>}
-    {attackReason && <small className="form-error">{attackReason}</small>}
-    <div className="friend-buttons">
-      <button className="primary-button" disabled={busy || Boolean(attackReason)} title={attackReason} onClick={() => onTurn("attack", weapon.slot)}>Атака</button>
-      {firearm && <button className="secondary-button" disabled={busy || Boolean(reloadReason)} title={reloadReason} onClick={() => onTurn("reload", weapon.slot)}>Перезарядить</button>}
-    </div>
-    {firearm && reloadReason && <small className="field-hint">Перезарядка недоступна: {reloadReason} Можно выбрать другое оружие.</small>}
-  </article>;
 }
