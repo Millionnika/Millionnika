@@ -112,7 +112,6 @@ function Combatant({ name, health, maximumHealth, side, equipment, protection, w
       <EquipmentColumn title="Броня" slots={armorSlots} equipment={equipment} side={side} />
       <EquipmentColumn title="Оружие" slots={weaponSlots} equipment={equipment} side={side} weapons={weapons} actionDisabled={actionDisabled} onAction={onAction} />
     </div>
-    <span className="combatant-health-label">Здоровье {Math.round(percent)}%</span>
   </article>;
 }
 
@@ -128,13 +127,13 @@ function EquipmentColumn({ title, slots, equipment, side, weapons, actionDisable
   const relevant = equipment?.filter((item) => item.type === (title === "Оружие" ? "weapon" : "armor")) ?? [];
   const hasSnapshot = equipment !== undefined;
   return <div className={`combatant-equipment ${kind}`} aria-label={title}>
-    <strong>{title}</strong>
+    <strong>{title}{!hasSnapshot && <small>Нет данных старого боя</small>}</strong>
     {slots.map((slot, index) => {
       const item = relevant.find((entry) => entry.slot === slot) ?? (title === "Оружие" && index === 0 ? relevant.find((entry) => entry.slot === "weapon") : undefined);
       const weapon = weapons?.find((entry) => entry.slot === slot);
       if (kind === "weapons" && side === "player") return <PlayerWeaponSlot key={slot} slot={slot} item={item} weapon={weapon} hasSnapshot={hasSnapshot} disabled={actionDisabled} onAction={onAction} />;
       return <div className={`combatant-slot${item ? " filled" : " empty"}`} key={slot}>
-        <span>{slotNames[slot] ?? slot}</span><i aria-hidden="true">{kind === "weapons" ? "W" : "A"}</i><b title={item?.name}>{item?.name ?? (hasSnapshot ? "Пусто" : "Нет данных старого боя")}</b>
+        <span>{slotNames[slot] ?? slot}</span><i aria-hidden="true">{kind === "weapons" ? "W" : "A"}</i><b title={item?.name}>{item?.name ?? (hasSnapshot ? "Пусто" : "Нет данных")}</b>
       </div>;
     })}
   </div>;
@@ -154,7 +153,7 @@ function PlayerWeaponSlot({ slot, item, weapon, hasSnapshot, disabled, onAction 
   const blockedReason = disabled ? "Дождитесь доступности действия" : attackReason;
   return <div className={`combatant-slot player-weapon-slot${weaponName ? " filled" : " empty"}${temporary ? " future" : ""}`}>
     <button className="weapon-slot-attack" disabled={disabled || Boolean(attackReason)} title={blockedReason} onClick={() => onAction?.("attack", slot)}>
-      <span>{slotNames[slot] ?? slot}</span><i aria-hidden="true">{temporary ? "…" : "W"}</i><b title={weaponName}>{weaponName ?? (hasSnapshot ? "Пусто" : "Нет данных старого боя")}</b>
+      <span>{slotNames[slot] ?? slot}</span><i aria-hidden="true">{temporary ? "…" : "W"}</i><b title={weaponName}>{weaponName ?? (hasSnapshot ? "Пусто" : "Нет данных")}</b>
       {weapon && <small>{firearm ? `${weapon.ammoInClip}/${weapon.clipSize} · запас ${weapon.reserveAmmo}` : "Без патронов"}</small>}
       {attackReason && <em>{attackReason}</em>}
     </button>
