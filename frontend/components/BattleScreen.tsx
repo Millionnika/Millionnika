@@ -143,18 +143,18 @@ function EquipmentColumn({ title, slots, equipment, side, weapons, actionDisable
 function PlayerWeaponSlot({ slot, item, weapon, hasSnapshot, disabled, onAction }: Readonly<{ slot: string; item?: BattleEquipment; weapon?: BattleWeapon; hasSnapshot: boolean; disabled: boolean; onAction?: (action: "attack" | "reload", slot: string) => void }>) {
   const temporary = slot === "temporary";
   const firearm = Boolean(weapon && weapon.clipSize > 0);
+  const weaponName = item?.name ?? weapon?.name;
   const reloadReason = weapon && firearm
     ? weapon.ammoInClip >= weapon.clipSize ? "Магазин уже полный" : weapon.reserveAmmo === 0 ? "Запас патронов пуст" : ""
     : "Перезарядка не требуется";
   const attackReason = temporary
     ? "Действие для временного оружия пока не поддерживается"
-    : !item ? hasSnapshot ? "Слот пуст" : "Нет данных старого боя"
-    : !weapon ? "Сервер не вернул состояние оружия"
+    : !weapon ? "В этом слоте нет оружия"
     : firearm && weapon.ammoInClip === 0 ? "Магазин пуст — перезарядите оружие" : "";
   const blockedReason = disabled ? "Дождитесь доступности действия" : attackReason;
-  return <div className={`combatant-slot player-weapon-slot${item ? " filled" : " empty"}${temporary ? " future" : ""}`}>
+  return <div className={`combatant-slot player-weapon-slot${weaponName ? " filled" : " empty"}${temporary ? " future" : ""}`}>
     <button className="weapon-slot-attack" disabled={disabled || Boolean(attackReason)} title={blockedReason} onClick={() => onAction?.("attack", slot)}>
-      <span>{slotNames[slot] ?? slot}</span><i aria-hidden="true">{temporary ? "…" : "W"}</i><b title={item?.name}>{item?.name ?? (hasSnapshot ? "Пусто" : "Нет данных старого боя")}</b>
+      <span>{slotNames[slot] ?? slot}</span><i aria-hidden="true">{temporary ? "…" : "W"}</i><b title={weaponName}>{weaponName ?? (hasSnapshot ? "Пусто" : "Нет данных старого боя")}</b>
       {weapon && <small>{firearm ? `${weapon.ammoInClip}/${weapon.clipSize} · запас ${weapon.reserveAmmo}` : "Без патронов"}</small>}
       {attackReason && <em>{attackReason}</em>}
     </button>
