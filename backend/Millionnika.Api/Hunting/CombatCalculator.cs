@@ -28,7 +28,7 @@ public sealed class CombatCalculator(IOptions<HuntingOptions> options, IRandomSo
         var bullets = weapon.ClipSize == 0 ? 0 : Math.Min(weapon.AmmoInClip,
             weapon.RateMin + (int)Math.Floor(random.NextDouble() * (weapon.RateMax - weapon.RateMin + 1)));
         if ((decimal)random.NextDouble() * 100m >= hitChance)
-            return new(false, string.Empty, 0, 0, bullets, $"{weapon.Name}: промах.");
+            return new(false, string.Empty, 0, 0, bullets, AttackMessage(weapon, bullets, null, 0));
 
         var bodyPart = PickBodyPart();
         var multiplier = settings.BodyPartDamageMultipliers[bodyPart];
@@ -41,7 +41,39 @@ public sealed class CombatCalculator(IOptions<HuntingOptions> options, IRandomSo
         raw *= 1m - appliedArmor / 100m;
         var damage = Math.Max(1, (int)Math.Floor(raw));
         return new(true, bodyPart, damage, appliedArmor, bullets,
-            $"{weapon.Name}: попадание ({bodyPart}), урон {damage}.");
+            AttackMessage(weapon, bullets, bodyPart, damage));
+    }
+
+    private static string AttackMessage(CombatWeapon weapon, int bullets, string? bodyPart, int damage)
+    {
+        var result = bodyPart is null
+            ? "промах"
+            : $"попадание в {BodyPartName(bodyPart)}, урон {damage}";
+        return weapon.ClipSize > 0
+            ? $"{weapon.Name} выпустил {bullets} {RoundWord(bullets)}: {result}."
+            : $"{weapon.Name}: {result}.";
+    }
+
+    private static string BodyPartName(string bodyPart) => bodyPart switch
+    {
+        "head" => "голову",
+        "throat" => "горло",
+        "heart" => "сердце",
+        "chest" => "грудь",
+        "stomach" => "живот",
+        "arms" => "руки",
+        "hands" => "кисти",
+        "groin" => "пах",
+        "legs" => "ноги",
+        "feet" => "ступни",
+        _ => bodyPart
+    };
+
+    private static string RoundWord(int amount)
+    {
+        var lastTwo = amount % 100;
+        if (lastTwo is >= 11 and <= 14) return "зарядов";
+        return (amount % 10) switch { 1 => "заряд", 2 or 3 or 4 => "заряда", _ => "зарядов" };
     }
 
     internal decimal BaseHitChance(int attackerReflexes, int defenderAgility) =>

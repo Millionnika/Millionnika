@@ -52,10 +52,29 @@ public sealed class CombatCalculatorTests
     [Fact]
     public void FirearmConsumesRemainingRoundsBelowMinimumRate()
     {
-        var calculator = new CombatCalculator(Options.Create(Settings()), new SequenceRandom(0.9, 0, 0));
+        var random = new SequenceRandom(0.9, 0, 0);
+        var calculator = new CombatCalculator(Options.Create(Settings()), random);
         var hit = calculator.Attack(new(10, 10, 10, 10), new(10, 10, 10, 10),
             new("primary", "Тест", 10, 100, "pulse", 30, 3, 5, 2, 0), []);
         Assert.Equal(2, hit.Bullets);
+        Assert.Equal($"Тест выпустил 2 заряда: попадание в голову, урон {hit.Damage}.", hit.Message);
+        Assert.Equal(3, random.Calls);
+    }
+
+    [Fact]
+    public void FirearmMiss_StillConsumesOneRateOfFireBurstAndReportsOneMiss()
+    {
+        var random = new SequenceRandom(0, 0);
+        var calculator = new CombatCalculator(Options.Create(Settings()), random);
+
+        var hit = calculator.Attack(new(10, 10, 10, 10), new(10, 10, 10, 10),
+            new("primary", "Карабин", 10, 0, "pulse", 30, 4, 4, 24, 35), []);
+
+        Assert.False(hit.Hit);
+        Assert.Equal(4, hit.Bullets);
+        Assert.Equal(0, hit.Damage);
+        Assert.Equal("Карабин выпустил 4 заряда: промах.", hit.Message);
+        Assert.Equal(2, random.Calls);
     }
 
     private static HuntingOptions Settings() => new()
@@ -74,6 +93,7 @@ public sealed class CombatCalculatorTests
     private sealed class SequenceRandom(params double[] values) : IRandomSource
     {
         private int index;
+        public int Calls => index;
         public double NextDouble() => values[Math.Min(index++, values.Length - 1)];
     }
 }

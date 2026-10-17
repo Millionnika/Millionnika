@@ -185,12 +185,18 @@ public sealed class HuntingService(
         var messages = ReadLog(fight);
         if (request.Action == "reload")
         {
-            if (weapon.ClipSize == 0 || weapon.ReserveAmmo == 0 || weapon.AmmoInClip >= weapon.ClipSize)
+            if (weapon.ClipSize == 0)
                 return await RejectAsync(transaction, character, request.RequestId, "turn", signature,
-                    "Перезарядка сейчас невозможна.", 409, token);
+                    "Это оружие не требует перезарядки.", 409, token);
+            if (weapon.AmmoInClip >= weapon.ClipSize)
+                return await RejectAsync(transaction, character, request.RequestId, "turn", signature,
+                    "Магазин уже полный. Можно выбрать другое оружие.", 409, token);
+            if (weapon.ReserveAmmo == 0)
+                return await RejectAsync(transaction, character, request.RequestId, "turn", signature,
+                    "Запас патронов пуст. Можно выбрать другое оружие.", 409, token);
             var amount = Math.Min(weapon.ClipSize - weapon.AmmoInClip, weapon.ReserveAmmo);
             weapon = weapon with { AmmoInClip = weapon.AmmoInClip + amount, ReserveAmmo = weapon.ReserveAmmo - amount };
-            messages.Add($"{weapon.Name}: перезарядка, {amount} ед.");
+            messages.Add($"{weapon.Name}: перезарядка, в магазин добавлено {amount} патронов.");
         }
         else
         {

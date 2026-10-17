@@ -85,7 +85,27 @@ function publishFightHealth(fight: Fight) {
 function FightPanel({ fight, busy, onTurn }: Readonly<{ fight: Fight; busy: boolean; onTurn: (action: "attack" | "reload", slot: string) => void }>) {
   return <section className="fight-panel">
     <div className="fight-health"><strong>Игрок: {fight.playerHealth}/{fight.maximumPlayerHealth}</strong><strong>Робот: {fight.robotHealth}/{fight.maximumRobotHealth}</strong><span>Ход {fight.turn}/{fight.maximumTurns}</span></div>
-    <div className="fight-weapons">{fight.weapons.map((weapon) => <article className="stat-card" key={weapon.slot}><span>{weapon.slot}</span><strong>{weapon.name}</strong><small>{weapon.clipSize ? `Магазин ${weapon.ammoInClip}/${weapon.clipSize} · запас ${weapon.reserveAmmo}` : "Боеприпасы не нужны"}</small><div className="friend-buttons"><button className="primary-button" disabled={busy || (weapon.clipSize > 0 && weapon.ammoInClip === 0)} onClick={() => onTurn("attack", weapon.slot)}>Атака</button>{weapon.clipSize > 0 && <button className="secondary-button" disabled={busy || weapon.reserveAmmo === 0 || weapon.ammoInClip >= weapon.clipSize} onClick={() => onTurn("reload", weapon.slot)}>Перезарядить</button>}</div></article>)}</div>
+    <div className="fight-weapons">{fight.weapons.map((weapon) => <WeaponActions key={weapon.slot} weapon={weapon} busy={busy} onTurn={onTurn} />)}</div>
     <div className="action-log"><h2>Журнал</h2>{fight.log.slice().reverse().map((line, index) => <article key={`${index}-${line}`}><p>{line}</p></article>)}</div>
   </section>;
+}
+
+function WeaponActions({ weapon, busy, onTurn }: Readonly<{ weapon: Weapon; busy: boolean; onTurn: (action: "attack" | "reload", slot: string) => void }>) {
+  const firearm = weapon.clipSize > 0;
+  const reloadReason = weapon.ammoInClip >= weapon.clipSize
+    ? "Магазин уже полный."
+    : weapon.reserveAmmo === 0 ? "Запас патронов пуст." : "";
+  const attackReason = firearm && weapon.ammoInClip === 0
+    ? "Магазин пуст — перезарядите оружие или выберите другое." : "";
+  return <article className="stat-card">
+    <span>{weapon.slot}</span><strong>{weapon.name}</strong>
+    <small>{firearm ? `В магазине: ${weapon.ammoInClip}/${weapon.clipSize} · Запас: ${weapon.reserveAmmo} патронов` : "Боеприпасы не нужны"}</small>
+    {firearm && <small className="field-hint">Запас указан в патронах, не в магазинах.</small>}
+    {attackReason && <small className="form-error">{attackReason}</small>}
+    <div className="friend-buttons">
+      <button className="primary-button" disabled={busy || Boolean(attackReason)} title={attackReason} onClick={() => onTurn("attack", weapon.slot)}>Атака</button>
+      {firearm && <button className="secondary-button" disabled={busy || Boolean(reloadReason)} title={reloadReason} onClick={() => onTurn("reload", weapon.slot)}>Перезарядить</button>}
+    </div>
+    {firearm && reloadReason && <small className="field-hint">Перезарядка недоступна: {reloadReason} Можно выбрать другое оружие.</small>}
+  </article>;
 }
