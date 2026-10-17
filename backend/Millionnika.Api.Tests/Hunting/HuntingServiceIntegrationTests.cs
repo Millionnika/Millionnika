@@ -17,8 +17,10 @@ namespace Millionnika.Api.Tests.Hunting;
 public sealed class HuntingServiceIntegrationTests
 {
     private static readonly Guid TargetId = Guid.Parse("55555555-5555-5555-5555-555555555001");
+    private static readonly Guid ArmoredTargetId = Guid.Parse("55555555-5555-5555-5555-555555555002");
     private static readonly Guid PrimaryId = Guid.Parse("22222222-2222-2222-2222-222222222001");
     private static readonly Guid MeleeId = Guid.Parse("22222222-2222-2222-2222-222222222003");
+    private static readonly Guid BodyArmorId = Guid.Parse("22222222-2222-2222-2222-222222222005");
     private static readonly Guid AmmunitionId = Guid.Parse("33333333-3333-3333-3333-333333333001");
 
     [Fact]
@@ -162,6 +164,7 @@ public sealed class HuntingServiceIntegrationTests
     {
         Clock.Set(DateTimeOffset.Parse("2026-10-11T02:00:00Z"));
         var user = CreateUser();
+        user.Character!.HuntingLevel = 2;
         await using (var setup = TestDatabase.CreateDbContext())
         {
             setup.Users.Add(user);
@@ -169,7 +172,9 @@ public sealed class HuntingServiceIntegrationTests
                 new EquipmentInstance { Id = Guid.NewGuid(), CharacterId = user.Character!.Id, ItemId = PrimaryId,
                     Damage = 56, Accuracy = 52, EquippedSlot = EquipmentSlots.Primary, CreatedAtUtc = Clock.GetUtcNow() },
                 new EquipmentInstance { Id = Guid.NewGuid(), CharacterId = user.Character.Id, ItemId = MeleeId,
-                    Damage = 16, Accuracy = 50, EquippedSlot = EquipmentSlots.Melee, CreatedAtUtc = Clock.GetUtcNow() });
+                    Damage = 16, Accuracy = 50, EquippedSlot = EquipmentSlots.Melee, CreatedAtUtc = Clock.GetUtcNow() },
+                new EquipmentInstance { Id = Guid.NewGuid(), CharacterId = user.Character.Id, ItemId = BodyArmorId,
+                    Armor = 20, EquippedSlot = EquipmentSlots.Body, CreatedAtUtc = Clock.GetUtcNow() });
             setup.InventoryItems.Add(new PlayerInventoryItem { Id = Guid.NewGuid(), CharacterId = user.Character.Id,
                 ItemId = AmmunitionId, Quantity = 35 });
             await setup.SaveChangesAsync();
@@ -179,9 +184,21 @@ public sealed class HuntingServiceIntegrationTests
             HuntFightResponse started;
             await using (var db = TestDatabase.CreateDbContext())
                 started = (await Service(db, new PredictableCombat()).StartAsync(user.Id,
-                    new(Guid.NewGuid(), TargetId), default)).Response;
+                    new(Guid.NewGuid(), ArmoredTargetId), default)).Response;
             var primary = Assert.Single(started.Weapons, value => value.Slot == EquipmentSlots.Primary);
             Assert.Equal((30, 5), (primary.AmmoInClip, primary.ReserveAmmo));
+            Assert.Collection(started.Participants!,
+                player => { Assert.Equal("player", player.Side); Assert.Equal(user.Username, player.Name); Assert.Equal("player", player.Type); },
+                robot => { Assert.Equal("opponent", robot.Side); Assert.Equal("Сторожевой паук", robot.Name); Assert.Equal("robot", robot.Type); });
+            Assert.Equal([EquipmentSlots.Primary, EquipmentSlots.Melee, EquipmentSlots.Body],
+                started.PlayerEquipment!.Select(value => value.Slot));
+            Assert.Single(started.RobotEquipment!);
+            Assert.Equal("Импульсный шипомёт", started.RobotEquipment![0].Name);
+            Assert.DoesNotContain(started.RobotEquipment, value => value.Type == ItemTypes.Armor);
+            var naturalProtection = Assert.Single(started.RobotProtection!);
+            Assert.Equal("natural", naturalProtection.Source);
+            Assert.Equal(8, naturalProtection.Armor);
+            var initialEquipment = started.PlayerEquipment!.Select(value => (value.Slot, value.Type, value.Name)).ToArray();
 
             await using (var db = TestDatabase.CreateDbContext())
             {
@@ -198,6 +215,9 @@ public sealed class HuntingServiceIntegrationTests
                 primary = Assert.Single(hit.Response.Weapons, value => value.Slot == EquipmentSlots.Primary);
                 Assert.Equal((26, 5), (primary.AmmoInClip, primary.ReserveAmmo));
                 Assert.Contains(hit.Response.Log, value => value.Contains("выпустил 4 заряда: попадание"));
+                Assert.Equal(hit.Response.RobotHealth,
+                    Assert.Single(hit.Response.Participants!, value => value.Side == "opponent").Health);
+                Assert.Equal(initialEquipment, hit.Response.PlayerEquipment!.Select(value => (value.Slot, value.Type, value.Name)));
             }
 
             Clock.Set(Clock.GetUtcNow().AddSeconds(2));
@@ -207,6 +227,8 @@ public sealed class HuntingServiceIntegrationTests
                 Assert.NotNull(restored);
                 primary = Assert.Single(restored.Weapons, value => value.Slot == EquipmentSlots.Primary);
                 Assert.Equal((26, 5), (primary.AmmoInClip, primary.ReserveAmmo));
+                Assert.Equal(initialEquipment, restored.PlayerEquipment!.Select(value => (value.Slot, value.Type, value.Name)));
+                Assert.Equal("Сторожевой паук", Assert.Single(restored.Participants!, value => value.Type == "robot").Name);
             }
 
             await using (var db = TestDatabase.CreateDbContext())
@@ -265,6 +287,40 @@ public sealed class HuntingServiceIntegrationTests
                 Assert.Equal(409, empty.StatusCode);
                 Assert.Contains("Запас патронов пуст", empty.Response.Message);
             }
+        }
+        finally
+        {
+            await using var cleanup = TestDatabase.CreateDbContext();
+            await cleanup.Users.Where(value => value.Id == user.Id).ExecuteDeleteAsync();
+        }
+    }
+
+    [Fact]
+    public async Task ReadAtExpirationBoundary_FinalizesInsteadOfReturningActiveAtZero()
+    {
+        Clock.Set(DateTimeOffset.Parse("2026-10-11T03:00:00Z"));
+        var user = CreateUser();
+        await using (var setup = TestDatabase.CreateDbContext())
+        {
+            setup.Users.Add(user);
+            setup.EquipmentInstances.Add(new EquipmentInstance { Id = Guid.NewGuid(), CharacterId = user.Character!.Id,
+                ItemId = MeleeId, Damage = 16, Accuracy = 100, EquippedSlot = EquipmentSlots.Melee,
+                CreatedAtUtc = Clock.GetUtcNow() });
+            await setup.SaveChangesAsync();
+        }
+        try
+        {
+            HuntFightResponse started;
+            await using (var db = TestDatabase.CreateDbContext())
+                started = (await Service(db).StartAsync(user.Id, new(Guid.NewGuid(), TargetId), default)).Response;
+
+            Clock.Set(started.ExpiresAtUtc);
+            await using var restarted = TestDatabase.CreateDbContext();
+            var expired = await Service(restarted).GetCurrentFightAsync(user.Id, default);
+
+            Assert.NotNull(expired);
+            Assert.Equal("timeout", expired.Status);
+            Assert.Null(expired.NextActionAtUtc);
         }
         finally
         {

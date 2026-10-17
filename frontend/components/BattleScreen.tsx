@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type BattleWeapon = {
   slot: string;
@@ -8,6 +8,14 @@ export type BattleWeapon = {
   ammoInClip: number;
   reserveAmmo: number;
   clipSize: number;
+};
+
+export type BattleParticipant = {
+  side: "player" | "opponent";
+  name: string;
+  type: "player" | "robot";
+  health: number;
+  maximumHealth: number;
 };
 
 type BattleScreenProps = {
@@ -21,33 +29,45 @@ type BattleScreenProps = {
   opponentHealth: number;
   maximumOpponentHealth: number;
   weapons: BattleWeapon[];
+  participants: BattleParticipant[];
   log: string[];
   busy: boolean;
   onAction: (action: "attack" | "reload", slot: string) => void;
+  onExpired: () => void;
 };
 
 export function BattleScreen({
   status, turn, maximumTurns, expiresAtUtc, nextActionAtUtc,
   playerHealth, maximumPlayerHealth, opponentHealth, maximumOpponentHealth,
-  weapons, log, busy, onAction,
+  weapons, participants, log, busy, onAction, onExpired,
 }: Readonly<BattleScreenProps>) {
   const now = useClock(status === "active");
   const secondsLeft = secondsUntil(expiresAtUtc, now);
   const cooldown = nextActionAtUtc ? secondsUntil(nextActionAtUtc, now) : 0;
   const active = status === "active";
+  const expirationRequested = useRef<string | null>(null);
+  const expiring = active && secondsLeft === 0;
+  const player = participants.find((value) => value.side === "player");
+  const opponent = participants.find((value) => value.side === "opponent");
+
+  useEffect(() => {
+    if (!expiring || expirationRequested.current === expiresAtUtc) return;
+    expirationRequested.current = expiresAtUtc;
+    onExpired();
+  }, [expiresAtUtc, expiring, onExpired]);
 
   return <section className={`battle-screen ${active ? "active" : "finished"}`} aria-label="Экран боя" aria-busy={busy}>
     <header className="battle-summary">
-      <div><span>Состояние</span><strong>{active ? "Бой продолжается" : "Бой завершён"}</strong></div>
+      <div><span>Состояние</span><strong>{expiring ? "Проверяем завершение" : active ? "Бой продолжается" : "Бой завершён"}</strong></div>
       <div><span>Ход</span><strong>{turn} / {maximumTurns}</strong></div>
-      <div><span>{active ? "До завершения" : "Время"}</span><strong>{active ? formatDuration(secondsLeft) : "Завершено"}</strong></div>
-      <div className="battle-action-state" aria-live="polite"><span>Действие</span><strong>{active ? busy ? "выполняется…" : cooldown > 0 ? `через ${cooldown} с` : "доступно" : "недоступно"}</strong></div>
+      <div><span>{active ? "До завершения" : "Время"}</span><strong>{expiring ? "завершается…" : active ? formatDuration(secondsLeft) : "Завершено"}</strong></div>
+      <div className="battle-action-state" aria-live="polite"><span>Действие</span><strong>{active ? expiring ? "ожидание результата" : busy ? "выполняется…" : cooldown > 0 ? `через ${cooldown} с` : "доступно" : "недоступно"}</strong></div>
     </header>
 
     <div className="battle-participants">
-      <Combatant name="Вы" health={playerHealth} maximumHealth={maximumPlayerHealth} side="player" />
+      <Combatant name={player?.name ?? "Вы"} health={player?.health ?? playerHealth} maximumHealth={player?.maximumHealth ?? maximumPlayerHealth} side="player" />
       <div className="battle-versus" aria-hidden="true">VS</div>
-      <Combatant name="Противник" health={opponentHealth} maximumHealth={maximumOpponentHealth} side="opponent" />
+      <Combatant name={opponent?.name ?? "Противник"} health={opponent?.health ?? opponentHealth} maximumHealth={opponent?.maximumHealth ?? maximumOpponentHealth} side="opponent" />
     </div>
 
     <section className="battle-loadout" aria-labelledby="battle-weapons-title">
@@ -59,7 +79,7 @@ export function BattleScreen({
         {weapons.map((weapon) => <WeaponActions
           key={weapon.slot}
           weapon={weapon}
-          disabled={busy || !active || cooldown > 0}
+          disabled={busy || !active || expiring || cooldown > 0}
           active={active}
           onAction={onAction}
         />)}

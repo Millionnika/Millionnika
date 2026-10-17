@@ -4,13 +4,15 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GameNav } from "@/components/GameNav";
-import { BattleScreen, type BattleWeapon } from "@/components/BattleScreen";
+import { BattleScreen, type BattleParticipant, type BattleWeapon } from "@/components/BattleScreen";
 import { apiFetch, API_URL, getErrorMessage, publishPlayerState } from "@/lib/api";
 import { getPendingAction } from "@/lib/pendingAction";
 
 type Target = { id: string; name: string; description: string; minimumHuntingLevel: number; energyCost: number; health: number; rewardCredits: number; rewardExperience: number; rewardHuntingExperience: number; unlocked: boolean; lockedReason: string | null };
 type Location = { id: string; name: string; description: string; minimumHuntingLevel: number; unlocked: boolean; targets: Target[] };
-type Fight = { fightId: string; replayed: boolean; status: string; turn: number; maximumTurns: number; playerHealth: number; maximumPlayerHealth: number; robotHealth: number; maximumRobotHealth: number; expiresAtUtc: string; nextActionAtUtc: string | null; message: string; log: string[]; weapons: BattleWeapon[]; creditsAwarded: number; experienceAwarded: number; huntingExperienceAwarded: number; huntingLevel: number; energy: number; levelIncreased: boolean; errorCode: string | null; requiredAmmoWeapon: string | null; requiredAmmoName: string | null };
+type BattleEquipment = { slot: string; type: "weapon" | "armor"; name: string; damage: number; accuracy: number; armor: number; coverage: Record<string, number> };
+type BattleProtection = { source: "natural"; armor: number; coverage: Record<string, number> };
+type Fight = { fightId: string; replayed: boolean; status: string; turn: number; maximumTurns: number; playerHealth: number; maximumPlayerHealth: number; robotHealth: number; maximumRobotHealth: number; expiresAtUtc: string; nextActionAtUtc: string | null; message: string; log: string[]; weapons: BattleWeapon[]; participants: BattleParticipant[]; playerEquipment: BattleEquipment[]; robotEquipment: BattleEquipment[]; robotProtection: BattleProtection[]; creditsAwarded: number; experienceAwarded: number; huntingExperienceAwarded: number; huntingLevel: number; energy: number; levelIncreased: boolean; errorCode: string | null; requiredAmmoWeapon: string | null; requiredAmmoName: string | null };
 
 export default function HuntingPage() {
   const router = useRouter();
@@ -39,6 +41,10 @@ export default function HuntingPage() {
     setFight(activeFight);
     if (activeFight) publishFightHealth(activeFight);
   }, [router]);
+
+  const refreshExpiredFight = useCallback(() => {
+    void load().catch(() => setError("Не удалось получить итог боя. Обновите страницу."));
+  }, [load]);
 
   useEffect(() => { void load().catch(() => setError("Не удалось загрузить охоту.")).finally(() => setLoading(false)); }, [load]);
 
@@ -79,7 +85,8 @@ export default function HuntingPage() {
       expiresAtUtc={fight.expiresAtUtc} nextActionAtUtc={fight.nextActionAtUtc}
       playerHealth={fight.playerHealth} maximumPlayerHealth={fight.maximumPlayerHealth}
       opponentHealth={fight.robotHealth} maximumOpponentHealth={fight.maximumRobotHealth}
-      weapons={fight.weapons} log={fight.log} busy={busy} onAction={turn}
+      participants={fight.participants ?? []} weapons={fight.weapons} log={fight.log} busy={busy}
+      onAction={turn} onExpired={refreshExpiredFight}
     />}
     {!loading && fight?.status !== "active" && <div className="hunting-locations">
       {locations.map((location) => <section className={`hunting-location${location.unlocked ? "" : " locked"}`} key={location.id}>

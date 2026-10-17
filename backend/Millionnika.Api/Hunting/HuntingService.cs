@@ -121,6 +121,14 @@ public sealed class HuntingService(
 
         var armor = equipment.Where(value => value.Item.Type == ItemTypes.Armor)
             .Select(value => new CombatArmor(value.Armor, ReadCoverage(value.Item.ArmorCoverage))).ToList();
+        var playerEquipment = equipment.Where(value => value.Item.Type is ItemTypes.Weapon or ItemTypes.Armor)
+            .OrderBy(value => Array.IndexOf(EquipmentSlots.All, value.EquippedSlot!))
+            .Select(value => new HuntEquipmentSnapshot(value.EquippedSlot!, value.Item.Type, value.Item.Name,
+                value.Damage, value.Accuracy, value.Armor,
+                value.Item.Type == ItemTypes.Armor ? ReadCoverage(value.Item.ArmorCoverage) : []))
+            .ToList();
+        var playerName = await db.Users.AsNoTracking().Where(value => value.Id == character.UserId)
+            .Select(value => value.Username).SingleAsync(token);
         var robotWeapon = new HuntWeaponState(Guid.Empty, Guid.Empty, "robot", target.WeaponName, target.WeaponDamage,
             target.WeaponAccuracy, "robot", target.ClipSize, target.RateOfFireMin, target.RateOfFireMax,
             target.ClipSize, checked(target.ClipSize * target.SpareClips));
@@ -128,7 +136,7 @@ public sealed class HuntingService(
             character.MaxHealth, Stats(character), armor, target.Health,
             new(target.Strength, target.Reflexes, target.Toughness, target.Agility), robotWeapon.ToCombat(),
             target.Armor > 0 ? [new CombatArmor(target.Armor, ReadCoverage(target.ArmorCoverage))] : [],
-            target.RewardCredits, target.RewardExperience, target.RewardHuntingExperience);
+            target.RewardCredits, target.RewardExperience, target.RewardHuntingExperience, playerName, playerEquipment);
         var state = new HuntState(weapons, robotWeapon);
         var now = recovery.UtcNow;
         character.Energy -= target.EnergyCost;
@@ -350,12 +358,30 @@ public sealed class HuntingService(
         var actionLog = fight.Status == "won" ? snapshot : null;
         var credits = actionLog is null ? 0 : (long)Math.Floor(snapshot.RewardCredits *
             (1 + Math.Min(Math.Max(0, snapshot.StartingHuntingLevel - snapshot.MinimumHuntingLevel) * settings.CreditBonusPerExtraLevel, settings.MaximumCreditBonus)));
+        var participantList = new List<HuntParticipantResponse>
+        {
+            new("player", snapshot.PlayerName, "player", fight.PlayerHealth, snapshot.PlayerMaximumHealth),
+            new("opponent", snapshot.TargetName, "robot", fight.RobotHealth, snapshot.RobotMaximumHealth)
+        };
+        var playerEquipment = (snapshot.PlayerEquipment ??
+            state.Weapons.Select(value => new HuntEquipmentSnapshot(value.Slot, ItemTypes.Weapon, value.Name,
+                value.Damage, value.Accuracy, 0, [])).ToList())
+            .Select(EquipmentResponse).ToList();
+        var robotEquipment = new List<HuntEquipmentResponse>
+        {
+            new("weapon", ItemTypes.Weapon, snapshot.RobotWeapon.Name, snapshot.RobotWeapon.Damage,
+                snapshot.RobotWeapon.Accuracy, 0, new Dictionary<string, decimal>())
+        };
+        var robotProtection = snapshot.RobotArmor
+            .Select(value => new HuntProtectionResponse("natural", value.Armor, value.Coverage)).ToList();
         return new(fight.Id, requestId, replayed, fight.Status, fight.Turn, settings.MaximumTurns,
             fight.PlayerHealth, snapshot.PlayerMaximumHealth, fight.RobotHealth, snapshot.RobotMaximumHealth,
             fight.ExpiresAtUtc, fight.Status == "active" ? fight.LastActionAtUtc?.AddSeconds(settings.ActionCooldownSeconds) : null,
             message, log, state.Weapons.Select(value => new HuntWeaponResponse(value.Slot, value.Name, value.AmmoInClip, value.ReserveAmmo, value.ClipSize)).ToList(),
             credits, actionLog?.RewardExperience ?? 0, actionLog?.RewardHuntingExperience ?? 0,
-            character.HuntingLevel, character.Energy, fight.Status == "won" && character.HuntingLevel > progression.GetHunting(character.HuntingExperience - snapshot.RewardHuntingExperience).Level);
+            character.HuntingLevel, character.Energy, fight.Status == "won" && character.HuntingLevel > progression.GetHunting(character.HuntingExperience - snapshot.RewardHuntingExperience).Level,
+            Participants: participantList, PlayerEquipment: playerEquipment, RobotEquipment: robotEquipment,
+            RobotProtection: robotProtection);
     }
 
     private HuntFightResponse EmptyResponse(GameCharacter character, Guid requestId, string message) =>
@@ -365,6 +391,8 @@ public sealed class HuntingService(
     private static HuntState ReadState(HuntFight fight) => JsonSerializer.Deserialize<HuntState>(fight.StateJson, CombatJson.Options)!;
     private static List<string> ReadLog(HuntFight fight) => JsonSerializer.Deserialize<List<string>>(fight.LogJson, CombatJson.Options) ?? [];
     private static Dictionary<string, decimal> ReadCoverage(string json) => JsonSerializer.Deserialize<Dictionary<string, decimal>>(json, CombatJson.Options) ?? [];
+    private static HuntEquipmentResponse EquipmentResponse(HuntEquipmentSnapshot value) =>
+        new(value.Slot, value.Type, value.Name, value.Damage, value.Accuracy, value.Armor, value.Coverage);
     private static CombatStats Stats(GameCharacter value) => new(value.Strength, value.Reflexes, value.Toughness, value.Agility);
     private static string ResultMessage(string status) => status switch { "won" => "Робот побеждён.", "lost" => "Персонаж проиграл бой.", "stalemate" => "Лимит ходов исчерпан.", _ => "Время боя истекло." };
     private Task<GameCharacter> LockCharacterAsync(Guid userId, CancellationToken token) => db.Characters
