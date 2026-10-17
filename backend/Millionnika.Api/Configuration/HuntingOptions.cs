@@ -14,8 +14,8 @@ public sealed class HuntingOptions
     public decimal DefeatHealthFloor { get; init; } = .25m;
     public Dictionary<string, decimal> BodyPartWeights { get; init; } = [];
     public Dictionary<string, decimal> BodyPartDamageMultipliers { get; init; } = [];
-    public decimal[] SpeedRatios { get; init; } = [];
+    public decimal[] ReflexAgilityRatios { get; init; } = [];
     public decimal[] HitChances { get; init; } = [];
-    public decimal[] DefenseRatios { get; init; } = [];
+    public decimal[] ToughnessStrengthRatios { get; init; } = [];
     public decimal[] DamageMitigations { get; init; } = [];
 }

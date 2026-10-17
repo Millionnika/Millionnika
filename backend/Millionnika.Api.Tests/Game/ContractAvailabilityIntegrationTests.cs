@@ -166,7 +166,7 @@ public sealed class ContractAvailabilityIntegrationTests
                 Id = characterId, UserId = userId, Level = 1, Credits = 100,
                 Energy = 100, MaxEnergy = 100, LastEnergyRecoveryAtUtc = now,
                 Nerve = 10, MaxNerve = 10, LastNerveRecoveryAtUtc = now,
-                Health = 100, MaxHealth = 100, Strength = 1, Speed = 1, Defense = 1, Dexterity = 1
+                Health = 100, MaxHealth = 100, Strength = 1, Reflexes = 1, Toughness = 1, Agility = 1
             }
         });
         await db.SaveChangesAsync();

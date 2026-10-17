@@ -78,6 +78,12 @@ public sealed class HuntingServiceIntegrationTests
                 var result = await Service(db).StartAsync(user.Id, new(startId, TargetId), default);
                 Assert.Equal(200, result.StatusCode); Assert.Equal(90, result.Response.Energy);
             }
+            await using (var restartedContext = TestDatabase.CreateDbContext())
+            {
+                var resumed = await Service(restartedContext).GetCurrentFightAsync(user.Id, default);
+                Assert.NotNull(resumed);
+                Assert.Equal("active", resumed!.Status);
+            }
             await using (var db = TestDatabase.CreateDbContext())
             {
                 var replay = await Service(db).StartAsync(user.Id, new(startId, TargetId), default);
@@ -161,7 +167,7 @@ public sealed class HuntingServiceIntegrationTests
     {
         var id = Guid.NewGuid(); var now = Clock.GetUtcNow();
         return new User { Id = id, Username = $"Hunt{id:N}"[..20], NormalizedUsername = $"HUNT{id:N}"[..20], Email = $"{id:N}@hunt.invalid", NormalizedEmail = $"{id:N}@HUNT.INVALID", PasswordHash = "integration-test-not-a-real-password", CreatedAtUtc = now,
-            Character = new GameCharacter { Id = Guid.NewGuid(), UserId = id, Level = 1, Credits = 100, Energy = 100, MaxEnergy = 100, LastEnergyRecoveryAtUtc = now, Nerve = 10, MaxNerve = 10, LastNerveRecoveryAtUtc = now, Health = 100, MaxHealth = 100, Strength = 1, Speed = 1, Defense = 1, Dexterity = 1, HuntingLevel = 1 } };
+            Character = new GameCharacter { Id = Guid.NewGuid(), UserId = id, Level = 1, Credits = 100, Energy = 100, MaxEnergy = 100, LastEnergyRecoveryAtUtc = now, Nerve = 10, MaxNerve = 10, LastNerveRecoveryAtUtc = now, Health = 100, MaxHealth = 100, Strength = 1, Reflexes = 1, Toughness = 1, Agility = 1, HuntingLevel = 1 } };
     }
 
     private static HuntingOptions Settings() => new()
@@ -171,7 +177,10 @@ public sealed class HuntingServiceIntegrationTests
         CreditBonusPerExtraLevel = .02m, MaximumCreditBonus = .2m, DefeatHealthFloor = .25m,
         BodyPartWeights = new() { ["head"] = 8, ["throat"] = 3, ["heart"] = 4, ["chest"] = 20, ["stomach"] = 15, ["arms"] = 15, ["hands"] = 5, ["groin"] = 5, ["legs"] = 20, ["feet"] = 5 },
         BodyPartDamageMultipliers = new() { ["head"] = 3.5m, ["throat"] = 3.5m, ["heart"] = 3.5m, ["chest"] = 2, ["stomach"] = 2, ["arms"] = 1, ["hands"] = .7m, ["groin"] = 2, ["legs"] = 1, ["feet"] = .7m },
-        SpeedRatios = [.25m, .5m, 1, 2, 4], HitChances = [10, 25, 50, 75, 90], DefenseRatios = [.25m, .5m, 1, 2, 4], DamageMitigations = [10, 25, 50, 75, 90]
+        ReflexAgilityRatios = [.015625m, .05m, .1m, .2m, .5m, 1m, 1.5m, 2m, 3m, 4m, 5m, 6m, 7m, 8m, 9m, 10m, 20m, 40m, 50m, 64m],
+        HitChances = [0m, 5.63m, 10.93m, 18.41m, 33.26m, 50m, 60.49m, 66.74m, 74.15m, 78.57m, 81.59m, 83.81m, 85.54m, 86.94m, 88.10m, 89.07m, 94.37m, 98.11m, 99.06m, 100m],
+        ToughnessStrengthRatios = [.03125m, .0625m, .125m, .25m, .5m, 1m, 1.5m, 2m, 3m, 4m, 5m, 6m, 7m, 8m, 9m, 10m, 11m, 12m, 13m, 14m],
+        DamageMitigations = [0m, 10m, 20m, 30m, 40m, 50m, 57.68m, 63.14m, 70.81m, 76.26m, 80.49m, 83.95m, 86.87m, 89.40m, 91.63m, 93.63m, 95.43m, 97.08m, 98.60m, 100m]
     };
     private sealed class ZeroRandom : IRandomSource { public double NextDouble() => 0; }
     private sealed class MutableTimeProvider(DateTimeOffset value) : TimeProvider

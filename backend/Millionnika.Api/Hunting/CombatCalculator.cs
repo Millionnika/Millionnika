@@ -5,7 +5,7 @@ using Millionnika.Api.Game;
 
 namespace Millionnika.Api.Hunting;
 
-public sealed record CombatStats(int Strength, int Speed, int Defense, int Dexterity);
+public sealed record CombatStats(int Strength, int Reflexes, int Toughness, int Agility);
 public sealed record CombatArmor(decimal Armor, Dictionary<string, decimal> Coverage);
 public sealed record CombatWeapon(string Slot, string Name, decimal Damage, decimal Accuracy,
     string Caliber, int ClipSize, int RateMin, int RateMax, int AmmoInClip, int ReserveAmmo);
@@ -22,7 +22,7 @@ public sealed class CombatCalculator(IOptions<HuntingOptions> options, IRandomSo
 
     public CombatHit Attack(CombatStats attacker, CombatStats defender, CombatWeapon weapon, IReadOnlyList<CombatArmor> armor)
     {
-        var baseHit = Interpolate(Ratio(attacker.Speed, defender.Dexterity), settings.SpeedRatios, settings.HitChances);
+        var baseHit = BaseHitChance(attacker.Reflexes, defender.Agility);
         var attenuation = 4m * baseHit * (100m - baseHit) / 10000m;
         var hitChance = Math.Clamp(baseHit + (weapon.Accuracy - 50m) * attenuation, 0m, 100m);
         var bullets = weapon.ClipSize == 0 ? 0 : Math.Min(weapon.AmmoInClip,
@@ -33,7 +33,7 @@ public sealed class CombatCalculator(IOptions<HuntingOptions> options, IRandomSo
         var bodyPart = PickBodyPart();
         var multiplier = settings.BodyPartDamageMultipliers[bodyPart];
         var raw = settings.BaseDamageScale * (decimal)Math.Sqrt(Math.Max(1, attacker.Strength)) * weapon.Damage / 10m * multiplier;
-        var mitigation = Interpolate(Ratio(defender.Defense, attacker.Strength), settings.DefenseRatios, settings.DamageMitigations);
+        var mitigation = ToughnessMitigation(attacker.Strength, defender.Toughness);
         raw *= 1m - mitigation / 100m;
         var appliedArmor = armor.Where(piece => piece.Coverage.TryGetValue(bodyPart, out var coverage) &&
                 (decimal)random.NextDouble() * 100m < coverage)
@@ -43,6 +43,12 @@ public sealed class CombatCalculator(IOptions<HuntingOptions> options, IRandomSo
         return new(true, bodyPart, damage, appliedArmor, bullets,
             $"{weapon.Name}: попадание ({bodyPart}), урон {damage}.");
     }
+
+    internal decimal BaseHitChance(int attackerReflexes, int defenderAgility) =>
+        Interpolate(Ratio(attackerReflexes, defenderAgility), settings.ReflexAgilityRatios, settings.HitChances);
+
+    internal decimal ToughnessMitigation(int attackerStrength, int defenderToughness) =>
+        Interpolate(Ratio(defenderToughness, attackerStrength), settings.ToughnessStrengthRatios, settings.DamageMitigations);
 
     private string PickBodyPart()
     {
@@ -78,11 +84,18 @@ public sealed class CombatCalculator(IOptions<HuntingOptions> options, IRandomSo
             value.DefeatHealthFloor is > 0 and <= 1 &&
             parts.All(part => value.BodyPartWeights.ContainsKey(part) && value.BodyPartWeights[part] > 0 &&
                 value.BodyPartDamageMultipliers.ContainsKey(part) && value.BodyPartDamageMultipliers[part] > 0) &&
-            ValidCurve(value.SpeedRatios, value.HitChances) && ValidCurve(value.DefenseRatios, value.DamageMitigations);
+            ValidCurve(value.ReflexAgilityRatios, value.HitChances) &&
+            ValidCurve(value.ToughnessStrengthRatios, value.DamageMitigations) &&
+            Interpolate(1m, value.ReflexAgilityRatios, value.HitChances) == 50m &&
+            Interpolate(10m, value.ReflexAgilityRatios, value.HitChances) == 89.07m &&
+            Interpolate(1m, value.ToughnessStrengthRatios, value.DamageMitigations) == 50m &&
+            Interpolate(.25m, value.ToughnessStrengthRatios, value.DamageMitigations) == 30m;
     }
 
     private static bool ValidCurve(decimal[] ratios, decimal[] values) => ratios.Length >= 2 && ratios.Length == values.Length &&
-        ratios.Zip(ratios.Skip(1)).All(pair => pair.First < pair.Second) && values.All(value => value is >= 0 and <= 100);
+        ratios[0] > 0 && ratios.Zip(ratios.Skip(1)).All(pair => pair.First < pair.Second) &&
+        values.All(value => value is >= 0 and <= 100) &&
+        values.Zip(values.Skip(1)).All(pair => pair.First <= pair.Second);
 }
 
 internal static class CombatJson

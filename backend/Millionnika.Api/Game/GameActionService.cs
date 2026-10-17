@@ -262,10 +262,10 @@ public sealed class GameActionService(
 
     private static string GetStatDisplayName(TrainingStat stat) => stat switch
     {
-        TrainingStat.Strength => "сила",
-        TrainingStat.Speed => "скорость",
-        TrainingStat.Defense => "защита",
-        TrainingStat.Dexterity => "ловкость",
+        TrainingStat.Strength => "сила (STR)",
+        TrainingStat.Toughness => "стойкость (TGH)",
+        TrainingStat.Reflexes => "реакция (REF)",
+        TrainingStat.Agility => "ловкость (AGI)",
         _ => throw new ArgumentOutOfRangeException(nameof(stat))
     };
 
@@ -301,7 +301,7 @@ public sealed class GameActionService(
             log.StatName, log.StatGain,
             new PlayerStateResponse(
                 character.Credits, character.Energy, character.Nerve,
-                character.Strength, character.Speed, character.Defense, character.Dexterity,
+                character.Strength, character.Reflexes, character.Toughness, character.Agility,
                 character.Experience, character.Level, character.HackingExperience, character.HackingLevel)),
         ResourceRejected: log.ErrorCode is "insufficient_nerve" or "insufficient_energy" or
             "numeric_limit" or "contract_unavailable" or "contract_locked" or "active_hunt");
@@ -313,7 +313,7 @@ public sealed class GameActionService(
             0, 0, 0, 0, 0, null, 0,
             new PlayerStateResponse(
                 character.Credits, character.Energy, character.Nerve,
-                character.Strength, character.Speed, character.Defense, character.Dexterity,
+                character.Strength, character.Reflexes, character.Toughness, character.Agility,
                 character.Experience, character.Level, character.HackingExperience, character.HackingLevel)),
         ResourceRejected: true);
 

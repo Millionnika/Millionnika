@@ -16,9 +16,9 @@ public sealed class GameCharacter
     public int Health { get; set; }
     public int MaxHealth { get; set; }
     public int Strength { get; set; }
-    public int Speed { get; set; }
-    public int Defense { get; set; }
-    public int Dexterity { get; set; }
+    public int Reflexes { get; set; }
+    public int Toughness { get; set; }
+    public int Agility { get; set; }
     public long Experience { get; set; }
     public int HackingLevel { get; set; } = 1;
     public long HackingExperience { get; set; }

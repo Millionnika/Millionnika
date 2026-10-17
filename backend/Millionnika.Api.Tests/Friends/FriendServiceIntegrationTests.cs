@@ -223,7 +223,7 @@ public sealed class FriendServiceIntegrationTests
                 Id = Guid.NewGuid(), UserId = id, Level = 1, Credits = 100,
                 Energy = 100, MaxEnergy = 100, LastEnergyRecoveryAtUtc = now,
                 Nerve = 10, MaxNerve = 10, LastNerveRecoveryAtUtc = now,
-                Health = 100, MaxHealth = 100, Strength = 1, Speed = 1, Defense = 1, Dexterity = 1
+                Health = 100, MaxHealth = 100, Strength = 1, Reflexes = 1, Toughness = 1, Agility = 1
             }
         };
     }

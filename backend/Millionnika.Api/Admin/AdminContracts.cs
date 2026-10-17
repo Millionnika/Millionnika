@@ -8,7 +8,7 @@ public sealed record AdminPlayerSummary(
 public sealed record AdminPlayerDetails(
     Guid Id, string Username, string Email, string Role, bool IsBlocked, DateTimeOffset CreatedAtUtc,
     int Level, long Credits, int Energy, int MaxEnergy, int Nerve, int MaxNerve,
-    int Health, int MaxHealth, int Strength, int Speed, int Defense, int Dexterity, long Experience);
+    int Health, int MaxHealth, int Strength, int Reflexes, int Toughness, int Agility, long Experience);
 
 public sealed record SetBlockRequest(bool IsBlocked, string? Reason);
 public sealed record UpdateResourcesRequest(long Credits, int Energy, int Nerve, int Health, string? Reason);
@@ -62,12 +62,12 @@ public sealed record AdminMutationResult(bool Succeeded, string Message)
 public sealed record AdminHuntingLocationResponse(Guid Id, string Name, string Description, int MinimumHuntingLevel, bool IsActive);
 public sealed record UpdateHuntingLocationRequest(string? Name, string? Description, int MinimumHuntingLevel, bool IsActive, string? Reason);
 public sealed record AdminHuntingTargetResponse(Guid Id, Guid LocationId, string Name, string Description,
-    int MinimumHuntingLevel, int EnergyCost, int Health, int Strength, int Speed, int Defense, int Dexterity,
+    int MinimumHuntingLevel, int EnergyCost, int Health, int Strength, int Reflexes, int Toughness, int Agility,
     string WeaponName, decimal WeaponDamage, decimal WeaponAccuracy, int ClipSize, int RateOfFireMin,
     int RateOfFireMax, int SpareClips, decimal Armor, string ArmorCoverage, long RewardCredits,
     long RewardExperience, long RewardHuntingExperience, bool IsActive);
 public sealed record UpdateHuntingTargetRequest(Guid LocationId, string? Name, string? Description,
-    int MinimumHuntingLevel, int EnergyCost, int Health, int Strength, int Speed, int Defense, int Dexterity,
+    int MinimumHuntingLevel, int EnergyCost, int Health, int Strength, int Reflexes, int Toughness, int Agility,
     string? WeaponName, decimal WeaponDamage, decimal WeaponAccuracy, int ClipSize, int RateOfFireMin,
     int RateOfFireMax, int SpareClips, decimal Armor, string? ArmorCoverage, long RewardCredits,
     long RewardExperience, long RewardHuntingExperience, bool IsActive, string? Reason);

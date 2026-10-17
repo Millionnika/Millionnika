@@ -319,14 +319,11 @@ namespace Millionnika.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<int>("Agility")
+                        .HasColumnType("integer");
+
                     b.Property<long>("Credits")
                         .HasColumnType("bigint");
-
-                    b.Property<int>("Defense")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Dexterity")
-                        .HasColumnType("integer");
 
                     b.Property<int>("Energy")
                         .HasColumnType("integer");
@@ -370,10 +367,13 @@ namespace Millionnika.Api.Migrations
                     b.Property<int>("Nerve")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Speed")
+                    b.Property<int>("Reflexes")
                         .HasColumnType("integer");
 
                     b.Property<int>("Strength")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Toughness")
                         .HasColumnType("integer");
 
                     b.Property<Guid>("UserId")
@@ -392,7 +392,7 @@ namespace Millionnika.Api.Migrations
 
                             t.HasCheckConstraint("CK_characters_Progression", "\"Level\" BETWEEN 1 AND 20 AND \"HackingLevel\" BETWEEN 1 AND 20 AND \"HackingExperience\" BETWEEN 0 AND 1000000000000 AND \"HuntingLevel\" BETWEEN 1 AND 20 AND \"HuntingExperience\" BETWEEN 0 AND 1000000000000");
 
-                            t.HasCheckConstraint("CK_characters_Stats", "\"Strength\" BETWEEN 0 AND 1000000 AND \"Speed\" BETWEEN 0 AND 1000000 AND \"Defense\" BETWEEN 0 AND 1000000 AND \"Dexterity\" BETWEEN 0 AND 1000000");
+                            t.HasCheckConstraint("CK_characters_Stats", "\"Strength\" BETWEEN 0 AND 1000000 AND \"Reflexes\" BETWEEN 0 AND 1000000 AND \"Toughness\" BETWEEN 0 AND 1000000 AND \"Agility\" BETWEEN 0 AND 1000000");
                         });
                 });
 
@@ -538,6 +538,9 @@ namespace Millionnika.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<int>("Agility")
+                        .HasColumnType("integer");
+
                     b.Property<decimal>("Armor")
                         .HasPrecision(5, 2)
                         .HasColumnType("numeric(5,2)");
@@ -549,16 +552,10 @@ namespace Millionnika.Api.Migrations
                     b.Property<int>("ClipSize")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Defense")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
-
-                    b.Property<int>("Dexterity")
-                        .HasColumnType("integer");
 
                     b.Property<int>("EnergyCost")
                         .HasColumnType("integer");
@@ -586,6 +583,9 @@ namespace Millionnika.Api.Migrations
                     b.Property<int>("RateOfFireMin")
                         .HasColumnType("integer");
 
+                    b.Property<int>("Reflexes")
+                        .HasColumnType("integer");
+
                     b.Property<long>("RewardCredits")
                         .HasColumnType("bigint");
 
@@ -598,10 +598,10 @@ namespace Millionnika.Api.Migrations
                     b.Property<int>("SpareClips")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Speed")
+                    b.Property<int>("Strength")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Strength")
+                    b.Property<int>("Toughness")
                         .HasColumnType("integer");
 
                     b.Property<decimal>("WeaponAccuracy")
@@ -625,7 +625,7 @@ namespace Millionnika.Api.Migrations
                         {
                             t.HasCheckConstraint("CK_hunting_targets_Level", "\"MinimumHuntingLevel\" BETWEEN 1 AND 20");
 
-                            t.HasCheckConstraint("CK_hunting_targets_Values", "\"EnergyCost\" > 0 AND \"Health\" > 0 AND \"Strength\" > 0 AND \"Speed\" > 0 AND \"Defense\" > 0 AND \"Dexterity\" > 0 AND \"RewardCredits\" BETWEEN 0 AND 1000000000000 AND \"RewardExperience\" BETWEEN 0 AND 1000000000000 AND \"RewardHuntingExperience\" BETWEEN 0 AND 1000000000000");
+                            t.HasCheckConstraint("CK_hunting_targets_Values", "\"EnergyCost\" > 0 AND \"Health\" > 0 AND \"Strength\" > 0 AND \"Reflexes\" > 0 AND \"Toughness\" > 0 AND \"Agility\" > 0 AND \"RewardCredits\" BETWEEN 0 AND 1000000000000 AND \"RewardExperience\" BETWEEN 0 AND 1000000000000 AND \"RewardHuntingExperience\" BETWEEN 0 AND 1000000000000");
 
                             t.HasCheckConstraint("CK_hunting_targets_Weapon", "\"WeaponDamage\" BETWEEN 1 AND 1000 AND \"WeaponAccuracy\" BETWEEN 0 AND 100 AND \"ClipSize\" BETWEEN 0 AND 1000 AND \"RateOfFireMin\" BETWEEN 0 AND 1000 AND \"RateOfFireMax\" BETWEEN \"RateOfFireMin\" AND 1000 AND \"SpareClips\" BETWEEN 0 AND 3");
                         });

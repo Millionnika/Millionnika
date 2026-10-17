@@ -8,10 +8,10 @@ import { getPendingAction } from "@/lib/pendingAction";
 import { GameNav } from "@/components/GameNav";
 
 const stats = [
-  { value: "strength", label: "Сила" },
-  { value: "speed", label: "Скорость" },
-  { value: "defense", label: "Защита" },
-  { value: "dexterity", label: "Ловкость" },
+  { value: "strength", label: "Сила (STR)" },
+  { value: "toughness", label: "Стойкость (TGH)" },
+  { value: "reflexes", label: "Реакция (REF)" },
+  { value: "agility", label: "Ловкость (AGI)" },
 ];
 
 type TrainingConfig = { energyCost: number; statGain: number; experienceGain: number };

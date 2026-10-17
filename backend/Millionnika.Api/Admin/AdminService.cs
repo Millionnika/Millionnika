@@ -26,8 +26,8 @@ public sealed class AdminService(
                 user.Character.Energy, user.Character.MaxEnergy,
                 user.Character.Nerve, user.Character.MaxNerve,
                 user.Character.Health, user.Character.MaxHealth,
-                user.Character.Strength, user.Character.Speed, user.Character.Defense,
-                user.Character.Dexterity, user.Character.Experience))
+                user.Character.Strength, user.Character.Reflexes, user.Character.Toughness,
+                user.Character.Agility, user.Character.Experience))
             .SingleOrDefaultAsync(cancellationToken);
 
     public async Task<AdminMutationResult> SetBlockAsync(
@@ -246,7 +246,7 @@ public sealed class AdminService(
     public async Task<IReadOnlyList<AdminHuntingTargetResponse>> GetHuntingTargetsAsync(CancellationToken token) =>
         await dbContext.HuntingTargets.AsNoTracking().OrderBy(value => value.MinimumHuntingLevel).ThenBy(value => value.Name)
             .Select(value => new AdminHuntingTargetResponse(value.Id, value.LocationId, value.Name, value.Description,
-                value.MinimumHuntingLevel, value.EnergyCost, value.Health, value.Strength, value.Speed, value.Defense, value.Dexterity,
+                value.MinimumHuntingLevel, value.EnergyCost, value.Health, value.Strength, value.Reflexes, value.Toughness, value.Agility,
                 value.WeaponName, value.WeaponDamage, value.WeaponAccuracy, value.ClipSize, value.RateOfFireMin,
                 value.RateOfFireMax, value.SpareClips, value.Armor, value.ArmorCoverage, value.RewardCredits,
                 value.RewardExperience, value.RewardHuntingExperience, value.IsActive)).ToListAsync(token);
@@ -263,7 +263,7 @@ public sealed class AdminService(
         var old = HuntingTargetValues(value);
         value.LocationId = request.LocationId; value.Name = request.Name!.Trim(); value.Description = request.Description!.Trim();
         value.MinimumHuntingLevel = request.MinimumHuntingLevel; value.EnergyCost = request.EnergyCost; value.Health = request.Health;
-        value.Strength = request.Strength; value.Speed = request.Speed; value.Defense = request.Defense; value.Dexterity = request.Dexterity;
+        value.Strength = request.Strength; value.Reflexes = request.Reflexes; value.Toughness = request.Toughness; value.Agility = request.Agility;
         value.WeaponName = request.WeaponName!.Trim(); value.WeaponDamage = request.WeaponDamage; value.WeaponAccuracy = request.WeaponAccuracy;
         value.ClipSize = request.ClipSize; value.RateOfFireMin = request.RateOfFireMin; value.RateOfFireMax = request.RateOfFireMax; value.SpareClips = request.SpareClips;
         value.Armor = request.Armor; value.ArmorCoverage = request.ArmorCoverage!; value.RewardCredits = request.RewardCredits;
@@ -320,7 +320,7 @@ public sealed class AdminService(
         !string.IsNullOrWhiteSpace(value.Description) && value.Description.Trim().Length <= 500 &&
         !string.IsNullOrWhiteSpace(value.WeaponName) && value.WeaponName.Trim().Length <= 120 &&
         value.MinimumHuntingLevel is >= 1 and <= 20 && value.EnergyCost > 0 && value.Health > 0 &&
-        value.Strength > 0 && value.Speed > 0 && value.Defense > 0 && value.Dexterity > 0 &&
+        value.Strength > 0 && value.Reflexes > 0 && value.Toughness > 0 && value.Agility > 0 &&
         value.WeaponDamage is >= 1 and <= 1000 && value.WeaponAccuracy is >= 0 and <= 100 &&
         value.ClipSize is >= 0 and <= 1000 && value.RateOfFireMin >= 0 && value.RateOfFireMax >= value.RateOfFireMin &&
         value.RateOfFireMax <= Math.Max(value.ClipSize, 0) && value.SpareClips is >= 0 and <= 3 &&
@@ -332,7 +332,7 @@ public sealed class AdminService(
     private static object HuntingTargetValues(HuntingTarget value) => new
     {
         value.LocationId, value.Name, value.Description, value.MinimumHuntingLevel, value.EnergyCost, value.Health,
-        value.Strength, value.Speed, value.Defense, value.Dexterity, value.WeaponName, value.WeaponDamage,
+        value.Strength, value.Reflexes, value.Toughness, value.Agility, value.WeaponName, value.WeaponDamage,
         value.WeaponAccuracy, value.ClipSize, value.RateOfFireMin, value.RateOfFireMax, value.SpareClips,
         value.Armor, value.ArmorCoverage, value.RewardCredits, value.RewardExperience, value.RewardHuntingExperience, value.IsActive
     };

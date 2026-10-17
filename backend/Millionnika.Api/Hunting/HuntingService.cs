@@ -126,7 +126,7 @@ public sealed class HuntingService(
             target.ClipSize, checked(target.ClipSize * target.SpareClips));
         var snapshot = new HuntSnapshot(target.Id, target.Name, target.EnergyCost, requiredLevel, character.HuntingLevel,
             character.MaxHealth, Stats(character), armor, target.Health,
-            new(target.Strength, target.Speed, target.Defense, target.Dexterity), robotWeapon.ToCombat(),
+            new(target.Strength, target.Reflexes, target.Toughness, target.Agility), robotWeapon.ToCombat(),
             target.Armor > 0 ? [new CombatArmor(target.Armor, ReadCoverage(target.ArmorCoverage))] : [],
             target.RewardCredits, target.RewardExperience, target.RewardHuntingExperience);
         var state = new HuntState(weapons, robotWeapon);
@@ -359,7 +359,7 @@ public sealed class HuntingService(
     private static HuntState ReadState(HuntFight fight) => JsonSerializer.Deserialize<HuntState>(fight.StateJson, CombatJson.Options)!;
     private static List<string> ReadLog(HuntFight fight) => JsonSerializer.Deserialize<List<string>>(fight.LogJson, CombatJson.Options) ?? [];
     private static Dictionary<string, decimal> ReadCoverage(string json) => JsonSerializer.Deserialize<Dictionary<string, decimal>>(json, CombatJson.Options) ?? [];
-    private static CombatStats Stats(GameCharacter value) => new(value.Strength, value.Speed, value.Defense, value.Dexterity);
+    private static CombatStats Stats(GameCharacter value) => new(value.Strength, value.Reflexes, value.Toughness, value.Agility);
     private static string ResultMessage(string status) => status switch { "won" => "Робот побеждён.", "lost" => "Персонаж проиграл бой.", "stalemate" => "Лимит ходов исчерпан.", _ => "Время боя истекло." };
     private Task<GameCharacter> LockCharacterAsync(Guid userId, CancellationToken token) => db.Characters
         .FromSqlInterpolated($"SELECT * FROM characters WHERE \"UserId\" = {userId} FOR UPDATE").SingleAsync(token);

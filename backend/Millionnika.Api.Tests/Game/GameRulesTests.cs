@@ -38,9 +38,9 @@ public sealed class GameRulesTests
 
     [Theory]
     [InlineData("strength", TrainingStat.Strength)]
-    [InlineData("SPEED", TrainingStat.Speed)]
-    [InlineData("defense", TrainingStat.Defense)]
-    [InlineData("Dexterity", TrainingStat.Dexterity)]
+    [InlineData("REFLEXES", TrainingStat.Reflexes)]
+    [InlineData("toughness", TrainingStat.Toughness)]
+    [InlineData("Agility", TrainingStat.Agility)]
     public void TrainingStat_AllowsOnlyKnownStats(string value, TrainingStat expected)
     {
         Assert.True(GameRules.TryParseTrainingStat(value, out var actual));
@@ -50,6 +50,9 @@ public sealed class GameRulesTests
     [Theory]
     [InlineData("credits")]
     [InlineData("energy")]
+    [InlineData("speed")]
+    [InlineData("defense")]
+    [InlineData("dexterity")]
     [InlineData("")]
     [InlineData(null)]
     public void TrainingStat_RejectsValuesThatCouldModifyOtherFields(string? value)
@@ -63,18 +66,18 @@ public sealed class GameRulesTests
         var character = new GameCharacter
         {
             Strength = 1,
-            Speed = 1,
-            Defense = 1,
-            Dexterity = 1
+            Reflexes = 1,
+            Toughness = 1,
+            Agility = 1
         };
 
-        Assert.True(GameRules.TryGetIncreasedStat(character, TrainingStat.Defense, 1, out var increased));
-        GameRules.SetStat(character, TrainingStat.Defense, increased);
+        Assert.True(GameRules.TryGetIncreasedStat(character, TrainingStat.Toughness, 1, out var increased));
+        GameRules.SetStat(character, TrainingStat.Toughness, increased);
 
         Assert.Equal(1, character.Strength);
-        Assert.Equal(1, character.Speed);
-        Assert.Equal(2, character.Defense);
-        Assert.Equal(1, character.Dexterity);
+        Assert.Equal(1, character.Reflexes);
+        Assert.Equal(2, character.Toughness);
+        Assert.Equal(1, character.Agility);
     }
 
     [Fact]
@@ -103,7 +106,7 @@ public sealed class GameRulesTests
         {
             Credits = GameNumericLimits.MaxEconomyValue + 1,
             MaxEnergy = 100, Energy = 100, MaxNerve = 10, Nerve = 10,
-            MaxHealth = 100, Health = 100, Strength = 1, Speed = 1, Defense = 1, Dexterity = 1
+            MaxHealth = 100, Health = 100, Strength = 1, Reflexes = 1, Toughness = 1, Agility = 1
         };
         Assert.False(GameNumericLimits.AreCharacterDefaultsValid(defaults));
         Assert.False(GameNumericLimits.IsTrainingValid(new TrainingOptions

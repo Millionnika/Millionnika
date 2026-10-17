@@ -21,9 +21,9 @@ type Profile = {
   nerve: Resource;
   health: Resource;
   strength: number;
-  speed: number;
-  defense: number;
-  dexterity: number;
+  reflexes: number;
+  toughness: number;
+  agility: number;
   experience: number;
   generalProgress: Progress;
   hackingProgress: Progress;
@@ -98,10 +98,10 @@ export default function ProfilePage() {
 
         <h2 className="section-title">Характеристики</h2>
         <section className="stats-grid" aria-label="Характеристики">
-          <Stat title="Сила" value={profile.strength} />
-          <Stat title="Скорость" value={profile.speed} />
-          <Stat title="Защита" value={profile.defense} />
-          <Stat title="Ловкость" value={profile.dexterity} />
+          <Stat title="Сила (STR)" value={profile.strength} />
+          <Stat title="Стойкость (TGH)" value={profile.toughness} />
+          <Stat title="Реакция (REF)" value={profile.reflexes} />
+          <Stat title="Ловкость (AGI)" value={profile.agility} />
         </section>
 
       </section>

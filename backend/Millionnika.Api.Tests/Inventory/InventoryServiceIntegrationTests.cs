@@ -251,9 +251,9 @@ public sealed class InventoryServiceIntegrationTests
                     Health = 100,
                     MaxHealth = 100,
                     Strength = 1,
-                    Speed = 1,
-                    Defense = 1,
-                    Dexterity = 1
+                    Reflexes = 1,
+                    Toughness = 1,
+                    Agility = 1
                 }
             });
             await db.SaveChangesAsync();

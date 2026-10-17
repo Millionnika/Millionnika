@@ -168,7 +168,7 @@ public sealed class EquipmentIntegrationTests
     {
         var id = Guid.NewGuid(); var now = DateTimeOffset.UtcNow;
         return new User { Id = id, Username = $"Equip{id:N}"[..20], NormalizedUsername = $"EQUIP{id:N}"[..20], Email = $"{id:N}@equipment.invalid", NormalizedEmail = $"{id:N}@EQUIPMENT.INVALID", PasswordHash = "integration-test-not-a-real-password", CreatedAtUtc = now,
-            Character = new GameCharacter { Id = Guid.NewGuid(), UserId = id, Level = 1, Credits = credits, Energy = 100, MaxEnergy = 100, LastEnergyRecoveryAtUtc = now, Nerve = 10, MaxNerve = 10, LastNerveRecoveryAtUtc = now, Health = 100, MaxHealth = 100, Strength = 1, Speed = 1, Defense = 1, Dexterity = 1 } };
+            Character = new GameCharacter { Id = Guid.NewGuid(), UserId = id, Level = 1, Credits = credits, Energy = 100, MaxEnergy = 100, LastEnergyRecoveryAtUtc = now, Nerve = 10, MaxNerve = 10, LastNerveRecoveryAtUtc = now, Health = 100, MaxHealth = 100, Strength = 1, Reflexes = 1, Toughness = 1, Agility = 1 } };
     }
 
     private static InventoryService CreateService(GameDbContext db) => new(db,

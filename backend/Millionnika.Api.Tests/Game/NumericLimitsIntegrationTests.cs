@@ -191,7 +191,7 @@ public sealed class NumericLimitsIntegrationTests
                 Id = characterId, UserId = userId, Level = 1, Credits = credits,
                 Energy = 100, MaxEnergy = 100, LastEnergyRecoveryAtUtc = now,
                 Nerve = 10, MaxNerve = 10, LastNerveRecoveryAtUtc = now,
-                Health = 100, MaxHealth = 100, Strength = strength, Speed = 1, Defense = 1, Dexterity = 1,
+                Health = 100, MaxHealth = 100, Strength = strength, Reflexes = 1, Toughness = 1, Agility = 1,
                 Experience = experience
             }
         });

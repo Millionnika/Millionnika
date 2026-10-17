@@ -5,9 +5,9 @@ using Millionnika.Api.Entities;
 public enum TrainingStat
 {
     Strength,
-    Speed,
-    Defense,
-    Dexterity
+    Toughness,
+    Reflexes,
+    Agility
 }
 
 public static class GameRules
@@ -29,9 +29,9 @@ public static class GameRules
         var current = stat switch
         {
             TrainingStat.Strength => character.Strength,
-            TrainingStat.Speed => character.Speed,
-            TrainingStat.Defense => character.Defense,
-            TrainingStat.Dexterity => character.Dexterity,
+            TrainingStat.Toughness => character.Toughness,
+            TrainingStat.Reflexes => character.Reflexes,
+            TrainingStat.Agility => character.Agility,
             _ => throw new ArgumentOutOfRangeException(nameof(stat))
         };
         increased = current;
@@ -44,9 +44,9 @@ public static class GameRules
         switch (stat)
         {
             case TrainingStat.Strength: character.Strength = value; break;
-            case TrainingStat.Speed: character.Speed = value; break;
-            case TrainingStat.Defense: character.Defense = value; break;
-            case TrainingStat.Dexterity: character.Dexterity = value; break;
+            case TrainingStat.Toughness: character.Toughness = value; break;
+            case TrainingStat.Reflexes: character.Reflexes = value; break;
+            case TrainingStat.Agility: character.Agility = value; break;
             default: throw new ArgumentOutOfRangeException(nameof(stat));
         }
     }

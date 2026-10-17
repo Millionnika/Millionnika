@@ -12,8 +12,8 @@ public static class GameNumericLimits
     public static bool AreCharacterDefaultsValid(CharacterDefaultsOptions options) =>
         options.Credits is >= 0 and <= MaxEconomyValue &&
         options.Experience is >= 0 and <= MaxEconomyValue &&
-        options.Strength is >= 0 and <= MaxStatValue && options.Speed is >= 0 and <= MaxStatValue &&
-        options.Defense is >= 0 and <= MaxStatValue && options.Dexterity is >= 0 and <= MaxStatValue &&
+        options.Strength is >= 0 and <= MaxStatValue && options.Reflexes is >= 0 and <= MaxStatValue &&
+        options.Toughness is >= 0 and <= MaxStatValue && options.Agility is >= 0 and <= MaxStatValue &&
         options.Energy >= 0 && options.Energy <= options.MaxEnergy && options.MaxEnergy > 0 &&
         options.Nerve >= 0 && options.Nerve <= options.MaxNerve && options.MaxNerve > 0 &&
         options.Health >= 0 && options.Health <= options.MaxHealth && options.MaxHealth > 0;

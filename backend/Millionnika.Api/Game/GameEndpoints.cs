@@ -86,7 +86,7 @@ public static class GameEndpoints
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["stat"] = ["Разрешены только strength, speed, defense или dexterity."]
+                ["stat"] = ["Разрешены только strength, reflexes, toughness или agility."]
             });
         }
 

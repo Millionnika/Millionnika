@@ -136,7 +136,7 @@ public sealed class PlayerDirectoryIntegrationTests
                 Id = Guid.NewGuid(), UserId = id, Level = 3, Credits = 999,
                 Energy = 80, MaxEnergy = 100, LastEnergyRecoveryAtUtc = now,
                 Nerve = 8, MaxNerve = 10, LastNerveRecoveryAtUtc = now,
-                Health = 70, MaxHealth = 100, Strength = 9, Speed = 8, Defense = 7, Dexterity = 6
+                Health = 70, MaxHealth = 100, Strength = 9, Reflexes = 8, Toughness = 7, Agility = 6
             }
         };
     }

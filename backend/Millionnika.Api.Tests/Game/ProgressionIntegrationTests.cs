@@ -118,7 +118,7 @@ public sealed class ProgressionIntegrationTests
         var userId = Guid.NewGuid(); var characterId = Guid.NewGuid(); var now = DateTimeOffset.UtcNow;
         await using var db = TestDatabase.CreateDbContext();
         db.Users.Add(new User { Id = userId, Username = $"Progress_{userId:N}"[..24], NormalizedUsername = $"PROGRESS_{userId:N}"[..24], Email = $"{userId:N}@progress.invalid", NormalizedEmail = $"{userId:N}@PROGRESS.INVALID", PasswordHash = "test-only", CreatedAtUtc = now,
-            Character = new GameCharacter { Id = characterId, UserId = userId, Level = 1, Experience = 0, HackingLevel = hackingExperience == 0 ? 1 : 20, HackingExperience = hackingExperience, Credits = 100, Energy = 100, MaxEnergy = 100, LastEnergyRecoveryAtUtc = now, Nerve = 10, MaxNerve = 10, LastNerveRecoveryAtUtc = now, Health = 100, MaxHealth = 100, Strength = 1, Speed = 1, Defense = 1, Dexterity = 1 } });
+            Character = new GameCharacter { Id = characterId, UserId = userId, Level = 1, Experience = 0, HackingLevel = hackingExperience == 0 ? 1 : 20, HackingExperience = hackingExperience, Credits = 100, Energy = 100, MaxEnergy = 100, LastEnergyRecoveryAtUtc = now, Nerve = 10, MaxNerve = 10, LastNerveRecoveryAtUtc = now, Health = 100, MaxHealth = 100, Strength = 1, Reflexes = 1, Toughness = 1, Agility = 1 } });
         await db.SaveChangesAsync(); return (userId, characterId);
     }
 

@@ -13,8 +13,8 @@ public sealed class CharacterDefaultsOptions
     public int Health { get; init; }
     public int MaxHealth { get; init; }
     public int Strength { get; init; }
-    public int Speed { get; init; }
-    public int Defense { get; init; }
-    public int Dexterity { get; init; }
+    public int Reflexes { get; init; }
+    public int Toughness { get; init; }
+    public int Agility { get; init; }
     public long Experience { get; init; }
 }

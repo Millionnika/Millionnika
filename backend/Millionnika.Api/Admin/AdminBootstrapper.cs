@@ -56,7 +56,7 @@ public static class AdminBootstrapper
             Energy = defaults.Energy, MaxEnergy = defaults.MaxEnergy, LastEnergyRecoveryAtUtc = time,
             Nerve = defaults.Nerve, MaxNerve = defaults.MaxNerve, LastNerveRecoveryAtUtc = time,
             Health = defaults.Health, MaxHealth = defaults.MaxHealth, Strength = defaults.Strength,
-            Speed = defaults.Speed, Defense = defaults.Defense, Dexterity = defaults.Dexterity,
+            Reflexes = defaults.Reflexes, Toughness = defaults.Toughness, Agility = defaults.Agility,
             Experience = defaults.Experience
         };
         db.Users.Add(user);

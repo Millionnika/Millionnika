@@ -57,7 +57,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
                 table.HasCheckConstraint("CK_characters_Credits", $"\"Credits\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
                 table.HasCheckConstraint("CK_characters_Experience", $"\"Experience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
                 table.HasCheckConstraint("CK_characters_Progression", $"\"Level\" BETWEEN 1 AND 20 AND \"HackingLevel\" BETWEEN 1 AND 20 AND \"HackingExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"HuntingLevel\" BETWEEN 1 AND 20 AND \"HuntingExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
-                table.HasCheckConstraint("CK_characters_Stats", $"\"Strength\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue} AND \"Speed\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue} AND \"Defense\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue} AND \"Dexterity\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue}");
+                table.HasCheckConstraint("CK_characters_Stats", $"\"Strength\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue} AND \"Reflexes\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue} AND \"Toughness\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue} AND \"Agility\" BETWEEN 0 AND {GameNumericLimits.MaxStatValue}");
             });
             entity.HasKey(character => character.Id);
             entity.HasIndex(character => character.UserId).IsUnique();
@@ -245,7 +245,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
             entity.ToTable("hunting_targets", table =>
             {
                 table.HasCheckConstraint("CK_hunting_targets_Level", "\"MinimumHuntingLevel\" BETWEEN 1 AND 20");
-                table.HasCheckConstraint("CK_hunting_targets_Values", $"\"EnergyCost\" > 0 AND \"Health\" > 0 AND \"Strength\" > 0 AND \"Speed\" > 0 AND \"Defense\" > 0 AND \"Dexterity\" > 0 AND \"RewardCredits\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"RewardExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"RewardHuntingExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
+                table.HasCheckConstraint("CK_hunting_targets_Values", $"\"EnergyCost\" > 0 AND \"Health\" > 0 AND \"Strength\" > 0 AND \"Reflexes\" > 0 AND \"Toughness\" > 0 AND \"Agility\" > 0 AND \"RewardCredits\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"RewardExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"RewardHuntingExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
                 table.HasCheckConstraint("CK_hunting_targets_Weapon", "\"WeaponDamage\" BETWEEN 1 AND 1000 AND \"WeaponAccuracy\" BETWEEN 0 AND 100 AND \"ClipSize\" BETWEEN 0 AND 1000 AND \"RateOfFireMin\" BETWEEN 0 AND 1000 AND \"RateOfFireMax\" BETWEEN \"RateOfFireMin\" AND 1000 AND \"SpareClips\" BETWEEN 0 AND 3");
             });
             entity.HasKey(value => value.Id);

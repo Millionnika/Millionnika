@@ -11,9 +11,9 @@ public sealed class HuntingTarget
     public int EnergyCost { get; set; }
     public int Health { get; set; }
     public int Strength { get; set; }
-    public int Speed { get; set; }
-    public int Defense { get; set; }
-    public int Dexterity { get; set; }
+    public int Reflexes { get; set; }
+    public int Toughness { get; set; }
+    public int Agility { get; set; }
     public string WeaponName { get; set; } = string.Empty;
     public decimal WeaponDamage { get; set; }
     public decimal WeaponAccuracy { get; set; }
