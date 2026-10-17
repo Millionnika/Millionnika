@@ -116,7 +116,7 @@ function Combatant({ name, health, maximumHealth, side, equipment, protection, w
 }
 
 const slotNames: Record<string, string> = {
-  primary: "Основное", secondary: "Вторичное", melee: "Ближний бой", temporary: "Временное", weapon: "Оружие",
+  primary: "Основное", secondary: "Вторичное", melee: "Ближний бой", temporary: "Специальное", weapon: "Оружие",
   helmet: "Голова", body: "Корпус", pants: "Ноги", gloves: "Перчатки", boots: "Обувь",
 };
 const weaponSlots = ["primary", "secondary", "melee", "temporary"];
@@ -155,7 +155,6 @@ function PlayerWeaponSlot({ slot, item, weapon, hasSnapshot, disabled, onAction 
     <button className="weapon-slot-attack" disabled={disabled || Boolean(attackReason)} title={blockedReason} onClick={() => onAction?.("attack", slot)}>
       <span>{slotNames[slot] ?? slot}</span><i aria-hidden="true">{temporary ? "…" : "W"}</i><b title={weaponName}>{weaponName ?? (hasSnapshot ? "Пусто" : "Нет данных")}</b>
       {weapon && <small>{firearm ? `${weapon.ammoInClip}/${weapon.clipSize} · запас ${weapon.reserveAmmo}` : "Без патронов"}</small>}
-      {attackReason && <em>{attackReason}</em>}
     </button>
     {weapon && firearm && !temporary && <button className="slot-reload" disabled={disabled || Boolean(reloadReason)} title={reloadReason} onClick={() => onAction?.("reload", slot)}>Перезарядить</button>}
   </div>;
