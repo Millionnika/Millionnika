@@ -370,6 +370,18 @@ input:focus, textarea:focus, select:focus { border-color: var(--teal); box-shado
 .admin-group-fields > label { min-width: 0; }
 .admin-group-fields input, .admin-group-fields textarea, .admin-group-fields select { min-width: 0; }
 .admin-group-fields textarea { min-height: 84px; }
+.npc-zone-table, .npc-loot-table { display: grid; gap: 5px; }
+.npc-table-head, .npc-zone-row, .npc-loot-row { display: grid; align-items: center; gap: 8px; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+.npc-zone-table .npc-table-head, .npc-zone-row { grid-template-columns: minmax(95px, 1fr) repeat(2, minmax(85px, 1fr)); }
+.npc-loot-table .npc-table-head, .npc-loot-row { grid-template-columns: minmax(130px, 2fr) repeat(3, minmax(75px, 1fr)) auto; }
+.npc-table-head { color: var(--muted); font-size: .82rem; font-weight: 700; }
+.npc-zone-row input, .npc-loot-row input { width: 100%; min-width: 0; }
+.npc-apply-all { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; margin-top: 8px; }
+.npc-apply-all label { max-width: 150px; }
+.npc-item-picker { display: grid; gap: 8px; max-width: 500px; }
+.npc-item-results { display: grid; gap: 4px; max-height: 180px; overflow-y: auto; }
+.npc-item-results button { text-align: left; }
+.text-button { padding: 0; border: 0; background: none; color: var(--teal-dark); text-decoration: underline; cursor: pointer; }
 .admin-actions { display: flex; grid-column: 1 / -1; align-items: end; justify-content: flex-end; gap: 10px; }
 .admin-actions .reason-field { flex: 1; max-width: 520px; }
 .admin-actions .comment-field { flex: 1; max-width: 520px; }
@@ -438,6 +450,10 @@ input:focus, textarea:focus, select:focus { border-color: var(--teal); box-shado
   .admin-section { grid-template-columns: minmax(0, 1fr); }
   .admin-list { max-height: 300px; }
   .admin-group-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .npc-loot-table .npc-table-head { display: none; }
+  .npc-loot-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .npc-loot-row strong { grid-column: 1 / -1; }
+  .npc-loot-row .secondary-button { grid-column: 1 / -1; }
   .admin-actions { align-items: stretch; flex-direction: column; }
   .admin-actions .reason-field { max-width: none; }
   .admin-actions .comment-field { max-width: none; }

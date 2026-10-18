@@ -6,7 +6,8 @@ using Millionnika.Api.Game;
 namespace Millionnika.Api.Hunting;
 
 public sealed record CombatStats(int Strength, int Reflexes, int Toughness, int Agility);
-public sealed record CombatArmor(decimal Armor, Dictionary<string, decimal> Coverage);
+public sealed record CombatArmor(decimal Armor, Dictionary<string, decimal> Coverage,
+    Dictionary<string, decimal>? ZoneProtection = null);
 public sealed record CombatWeapon(string Slot, string Name, decimal Damage, decimal Accuracy,
     string Caliber, int ClipSize, int RateMin, int RateMax, int AmmoInClip, int ReserveAmmo);
 public sealed record CombatHit(bool Hit, string BodyPart, int Damage, decimal Armor, int Bullets, string Message);
@@ -37,7 +38,7 @@ public sealed class CombatCalculator(IOptions<HuntingOptions> options, IRandomSo
         raw *= 1m - mitigation / 100m;
         var appliedArmor = armor.Where(piece => piece.Coverage.TryGetValue(bodyPart, out var coverage) &&
                 (decimal)random.NextDouble() * 100m < coverage)
-            .Select(piece => piece.Armor).DefaultIfEmpty(0).Max();
+            .Select(piece => piece.ZoneProtection?.GetValueOrDefault(bodyPart) ?? piece.Armor).DefaultIfEmpty(0).Max();
         raw *= 1m - appliedArmor / 100m;
         var damage = Math.Max(1, (int)Math.Floor(raw));
         return new(true, bodyPart, damage, appliedArmor, bullets,

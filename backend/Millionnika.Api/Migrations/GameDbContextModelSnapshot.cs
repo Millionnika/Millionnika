@@ -623,6 +623,10 @@ namespace Millionnika.Api.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
+                    b.Property<string>("ArmorZones")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("Category")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -922,6 +926,9 @@ namespace Millionnika.Api.Migrations
                     b.Property<string>("ArmorCoverage")
                         .HasColumnType("jsonb");
 
+                    b.Property<string>("ArmorZones")
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("Category")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -979,6 +986,41 @@ namespace Millionnika.Api.Migrations
                             t.HasCheckConstraint("CK_npc_templates_Category", "\"Category\" IN ('peaceful','robot','mutant','animal')");
 
                             t.HasCheckConstraint("CK_npc_templates_Combat", "\"Category\" = 'peaceful' OR COALESCE((\"Health\" BETWEEN 1 AND 1000000 AND \"Strength\" BETWEEN 1 AND 1000000 AND \"Toughness\" BETWEEN 1 AND 1000000 AND \"Reflexes\" BETWEEN 1 AND 1000000 AND \"Agility\" BETWEEN 1 AND 1000000 AND \"WeaponName\" IS NOT NULL AND \"WeaponName\" <> '' AND \"WeaponDamage\" BETWEEN 1 AND 1000 AND \"WeaponAccuracy\" BETWEEN 0 AND 100 AND \"Armor\" BETWEEN 0 AND 100 AND \"ArmorCoverage\" IS NOT NULL), FALSE)");
+                        });
+                });
+
+            modelBuilder.Entity("Millionnika.Api.Entities.NpcTemplateLootRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("ChancePercent")
+                        .HasPrecision(6, 3)
+                        .HasColumnType("numeric(6,3)");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("MaximumQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MinimumQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("NpcId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("NpcId", "ItemId")
+                        .IsUnique();
+
+                    b.ToTable("npc_template_loot_rows", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_npc_template_loot_rows_Values", "\"ChancePercent\" BETWEEN 0 AND 100 AND \"MinimumQuantity\" BETWEEN 1 AND 100 AND \"MaximumQuantity\" BETWEEN \"MinimumQuantity\" AND 100");
                         });
                 });
 
@@ -1245,6 +1287,25 @@ namespace Millionnika.Api.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Millionnika.Api.Entities.NpcTemplateLootRow", b =>
+                {
+                    b.HasOne("Millionnika.Api.Entities.Item", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Millionnika.Api.Entities.NpcTemplate", "Npc")
+                        .WithMany("LootRows")
+                        .HasForeignKey("NpcId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Npc");
+                });
+
             modelBuilder.Entity("Millionnika.Api.Entities.PlayerInventoryItem", b =>
                 {
                     b.HasOne("Millionnika.Api.Entities.GameCharacter", "Character")
@@ -1299,6 +1360,11 @@ namespace Millionnika.Api.Migrations
                     b.Navigation("EquipmentInstances");
 
                     b.Navigation("InventoryEntries");
+                });
+
+            modelBuilder.Entity("Millionnika.Api.Entities.NpcTemplate", b =>
+                {
+                    b.Navigation("LootRows");
                 });
 
             modelBuilder.Entity("Millionnika.Api.Entities.User", b =>

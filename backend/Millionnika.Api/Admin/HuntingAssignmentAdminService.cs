@@ -53,6 +53,7 @@ public sealed class HuntingAssignmentAdminService(GameDbContext db)
                 Agility = template.Agility.Value, WeaponName = template.WeaponName,
                 WeaponDamage = template.WeaponDamage.Value, WeaponAccuracy = template.WeaponAccuracy.Value,
                 Armor = template.Armor.Value, ArmorCoverage = template.ArmorCoverage,
+                ArmorZones = template.ArmorZones ?? "{}",
                 MinimumHuntingLevel = setup.MinimumHuntingLevel, EnergyCost = setup.EnergyCost,
                 ClipSize = setup.ClipSize, RateOfFireMin = setup.RateOfFireMin,
                 RateOfFireMax = setup.RateOfFireMax, SpareClips = setup.SpareClips,
@@ -60,6 +61,15 @@ public sealed class HuntingAssignmentAdminService(GameDbContext db)
                 MaximumCredits = setup.MaximumCredits, RewardExperience = setup.RewardExperience,
                 RewardHuntingExperience = setup.RewardHuntingExperience
             };
+            var templateLoot = await db.NpcTemplateLootRows.AsNoTracking()
+                .Where(row => row.NpcId == template.Id).ToListAsync(token);
+            foreach (var row in templateLoot)
+                target.LootRows.Add(new HuntingLootRow
+                {
+                    Id = row.Id, TargetId = target.Id, ItemId = row.ItemId,
+                    ChancePercent = row.ChancePercent, MinimumQuantity = row.MinimumQuantity,
+                    MaximumQuantity = row.MaximumQuantity
+                });
             db.NpcTemplates.Remove(template);
             db.HuntingTargets.Add(target);
             AddAudit(adminId, "npc_hunting_setup", target.Id.ToString(),

@@ -21,4 +21,6 @@ public sealed class NpcTemplate
     public decimal? WeaponAccuracy { get; set; }
     public decimal? Armor { get; set; }
     public string? ArmorCoverage { get; set; }
+    public string? ArmorZones { get; set; }
+    public ICollection<NpcTemplateLootRow> LootRows { get; set; } = [];
 }

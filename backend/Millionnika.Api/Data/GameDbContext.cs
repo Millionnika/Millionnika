@@ -22,6 +22,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
     public DbSet<HuntingLocationTarget> HuntingLocationTargets => Set<HuntingLocationTarget>();
     public DbSet<NpcTemplate> NpcTemplates => Set<NpcTemplate>();
     public DbSet<HuntingLootRow> HuntingLootRows => Set<HuntingLootRow>();
+    public DbSet<NpcTemplateLootRow> NpcTemplateLootRows => Set<NpcTemplateLootRow>();
     public DbSet<HuntFight> HuntFights => Set<HuntFight>();
     public DbSet<HuntingRequest> HuntingRequests => Set<HuntingRequest>();
 
@@ -276,6 +277,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
             entity.Property(value => value.WeaponAccuracy).HasPrecision(5, 2);
             entity.Property(value => value.Armor).HasPrecision(5, 2);
             entity.Property(value => value.ArmorCoverage).HasColumnType("jsonb").IsRequired();
+            entity.Property(value => value.ArmorZones).HasColumnType("jsonb").IsRequired();
         });
         modelBuilder.Entity<HuntingLocationTarget>(entity =>
         {
@@ -305,6 +307,17 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
             entity.Property(value => value.WeaponAccuracy).HasPrecision(5, 2);
             entity.Property(value => value.Armor).HasPrecision(5, 2);
             entity.Property(value => value.ArmorCoverage).HasColumnType("jsonb");
+            entity.Property(value => value.ArmorZones).HasColumnType("jsonb");
+        });
+        modelBuilder.Entity<NpcTemplateLootRow>(entity =>
+        {
+            entity.ToTable("npc_template_loot_rows", table => table.HasCheckConstraint("CK_npc_template_loot_rows_Values",
+                "\"ChancePercent\" BETWEEN 0 AND 100 AND \"MinimumQuantity\" BETWEEN 1 AND 100 AND \"MaximumQuantity\" BETWEEN \"MinimumQuantity\" AND 100"));
+            entity.HasKey(value => value.Id);
+            entity.Property(value => value.ChancePercent).HasPrecision(6, 3);
+            entity.HasIndex(value => new { value.NpcId, value.ItemId }).IsUnique();
+            entity.HasOne(value => value.Npc).WithMany(value => value.LootRows).HasForeignKey(value => value.NpcId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(value => value.Item).WithMany().HasForeignKey(value => value.ItemId).OnDelete(DeleteBehavior.Restrict);
         });
         modelBuilder.Entity<HuntingLootRow>(entity =>
         {

@@ -11,6 +11,67 @@ namespace Millionnika.Api.Tests.Admin;
 public sealed class NpcCatalogIntegrationTests
 {
     [Fact]
+    public async Task TemplateLootAndZoneArmor_SaveReopenAndPromoteWithoutChangingRewards()
+    {
+        var admin = CreateAdmin();
+        var id = Guid.NewGuid();
+        var name = $"Тест-охрана-{id:N}";
+        var itemId = Guid.Parse("11111111-1111-1111-1111-111111111001");
+        await using (var setup = TestDatabase.CreateDbContext())
+        {
+            setup.Users.Add(admin);
+            await setup.SaveChangesAsync();
+        }
+        try
+        {
+            var zones = Millionnika.Api.Hunting.NpcZoneArmor.BodyParts.ToDictionary(part => part,
+                part => new Millionnika.Api.Hunting.NpcZoneProtection(part == "head" ? 60 : 0, part == "head" ? 8 : 0));
+            var request = new SaveNpcRequest("robot", name, "Проверка настройки", true,
+                null, null, 30, 2, 2, 2, 2, "Лапа", 5, 50, 0, "{}", "Проверка добычи",
+                zones, [new(itemId, .001m, 1, 2)]);
+            await using (var create = TestDatabase.CreateDbContext())
+            {
+                Assert.True((await new NpcAdminService(create).CreateAsync(admin.Id, request, default)).Succeeded);
+                id = Assert.Single(await new NpcAdminService(create).GetAllAsync(default), value => value.Name == name).Id;
+            }
+            await using (var reopen = TestDatabase.CreateDbContext())
+            {
+                var service = new NpcAdminService(reopen);
+                var saved = Assert.Single(await service.GetAllAsync(default), value => value.Id == id);
+                Assert.Equal(.001m, Assert.Single(saved.LootRows!).ChancePercent);
+                Assert.Equal(60, saved.ArmorZones!["head"].Coverage);
+                Assert.False((await service.UpdateAsync(admin.Id, id, request with
+                { LootRows = [new(itemId, .001m, 1, 2), new(itemId, 10, 1, 1)] }, default)).Succeeded);
+                Assert.True((await service.UpdateAsync(admin.Id, id, request with
+                { LootRows = [new(itemId, 0, 1, 1)] }, default)).Succeeded);
+            }
+            await using (var promote = TestDatabase.CreateDbContext())
+            {
+                var location = await promote.HuntingLocations.Select(value => value.Id).FirstAsync();
+                var setup = new HuntingSetupRequest(1, 1, 0, 0, 0, 0, 7, 0, 0, 2, 3);
+                Assert.True((await new HuntingAssignmentAdminService(promote).AssignAsync(admin.Id, location,
+                    new(id, Setup: setup), default)).Succeeded);
+            }
+            await using (var verify = TestDatabase.CreateDbContext())
+            {
+                var target = await verify.HuntingTargets.Include(value => value.LootRows).SingleAsync(value => value.Id == id);
+                Assert.Equal((7L, 2L, 3L), (target.RewardCredits, target.RewardExperience, target.RewardHuntingExperience));
+                Assert.Equal(0, Assert.Single(target.LootRows).ChancePercent);
+                Assert.Equal(60, Millionnika.Api.Hunting.NpcZoneArmor.Read(target.ArmorZones)["head"].Coverage);
+                Assert.False(await verify.NpcTemplates.AnyAsync(value => value.Id == id));
+            }
+        }
+        finally
+        {
+            await using var cleanup = TestDatabase.CreateDbContext();
+            await cleanup.HuntingLocationTargets.Where(value => value.TargetId == id).ExecuteDeleteAsync();
+            await cleanup.AdminAuditLogs.Where(value => value.AdminUserId == admin.Id).ExecuteDeleteAsync();
+            await cleanup.HuntingTargets.Where(value => value.Id == id).ExecuteDeleteAsync();
+            await cleanup.NpcTemplates.Where(value => value.Id == id).ExecuteDeleteAsync();
+            await cleanup.Users.Where(value => value.Id == admin.Id).ExecuteDeleteAsync();
+        }
+    }
+    [Fact]
     public async Task LocationAssignments_KeepOneNpcRecordAndPreserveOriginalRobotAndLoot()
     {
         var admin = CreateAdmin();

@@ -350,9 +350,9 @@ public sealed class AdminService(
         value.RewardCredits is >= 0 and <= GameNumericLimits.MaxEconomyValue &&
         value.MinimumCredits is >= 0 and <= GameNumericLimits.MaxEconomyValue &&
         value.MaximumCredits >= value.MinimumCredits && value.MaximumCredits <= GameNumericLimits.MaxEconomyValue &&
-        value.LootRows is { Count: <= 30 } && value.LootRows.All(row => row.ItemId != Guid.Empty &&
+        (value.LootRows is null || value.LootRows is { Count: <= 30 } && value.LootRows.All(row => row.ItemId != Guid.Empty &&
             row.ChancePercent is >= 0 and <= 100 && row.ChancePercent * 1000 == decimal.Truncate(row.ChancePercent * 1000) &&
-            row.MinimumQuantity is >= 1 and <= 100 && row.MaximumQuantity >= row.MinimumQuantity && row.MaximumQuantity <= 100) &&
+            row.MinimumQuantity is >= 1 and <= 100 && row.MaximumQuantity >= row.MinimumQuantity && row.MaximumQuantity <= 100)) &&
         value.RewardExperience is >= 0 and <= GameNumericLimits.MaxEconomyValue &&
         value.RewardHuntingExperience is >= 0 and <= GameNumericLimits.MaxEconomyValue;
 

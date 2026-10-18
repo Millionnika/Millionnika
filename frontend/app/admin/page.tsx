@@ -19,7 +19,10 @@ type HuntingLocation = { id: string; name: string; description: string; minimumH
 type HuntingTarget = { id: string; name: string; description: string; minimumHuntingLevel: number; energyCost: number; health: number; strength: number; reflexes: number; toughness: number; agility: number; weaponName: string; weaponDamage: number; weaponAccuracy: number; clipSize: number; rateOfFireMin: number; rateOfFireMax: number; spareClips: number; armor: number; armorCoverage: string; rewardCredits: number; minimumCredits: number; maximumCredits: number; lootRows: { itemId: string; itemName: string; chancePercent: number; minimumQuantity: number; maximumQuantity: number }[]; rewardExperience: number; rewardHuntingExperience: number; isActive: boolean };
 type HuntingAssignment = { locationId: string; npcId: string; name: string; category: string; isActive: boolean };
 type NpcCategory = "peaceful" | "robot" | "mutant" | "animal";
-type Npc = { id: string; source: "template" | "hunting"; category: NpcCategory; name: string; description: string; isActive: boolean; portraitPath: string | null; figurePath: string | null; health: number | null; strength: number | null; toughness: number | null; reflexes: number | null; agility: number | null; weaponName: string | null; weaponDamage: number | null; weaponAccuracy: number | null; armor: number | null; armorCoverage: string | null };
+type NpcZone = { coverage: number; protection: number };
+type NpcLootRow = { itemId: string; itemName: string; chancePercent: number; minimumQuantity: number; maximumQuantity: number };
+type Npc = { id: string; source: "template" | "hunting"; category: NpcCategory; name: string; description: string; isActive: boolean; portraitPath: string | null; figurePath: string | null; health: number | null; strength: number | null; toughness: number | null; reflexes: number | null; agility: number | null; weaponName: string | null; weaponDamage: number | null; weaponAccuracy: number | null; armor: number | null; armorCoverage: string | null; armorZones: Record<string, NpcZone>; lootRows: NpcLootRow[] };
+const BODY_ZONES = [["head", "Голова"], ["throat", "Горло"], ["heart", "Сердце"], ["chest", "Грудь"], ["stomach", "Живот"], ["arms", "Руки"], ["hands", "Кисти"], ["groin", "Пах"], ["legs", "Ноги"], ["feet", "Ступни"]] as const;
 const MAX_ECONOMY_VALUE = 1_000_000_000_000;
 type AdminTab = "players" | "items" | "activities" | "npcs" | "logs";
 type ActivityTab = "contracts" | "hacking" | "hunting";
@@ -116,8 +119,8 @@ export default function AdminPage() {
 
   async function saveNpc(event: FormEvent<HTMLFormElement>, id?: string) {
     event.preventDefault(); setError(""); setMessage("");
-    const body = npcPayload(new FormData(event.currentTarget), npcCategory);
     try {
+      const body = npcPayload(new FormData(event.currentTarget), npcCategory);
       const response = await request(id ? `/api/admin/npcs/${id}` : "/api/admin/npcs", {
         method: id ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
@@ -233,7 +236,7 @@ export default function AdminPage() {
 
       {tab === "activities" && activityTab === "hunting" && huntingTab === "targets" && <AdminSection title="Роботы">
         <AdminRecordList rows={huntingTargets.map((target) => ({ id: target.id, title: target.name, detail: `Уровень охоты ${target.minimumHuntingLevel}` }))} selectedId={selectedTargetId} onSelect={setSelectedTargetId} />
-        {selectedTarget && [selectedTarget].map((target) => <form className="admin-editor admin-form" key={target.id} onSubmit={(event) => { event.preventDefault(); try { void mutate(`/api/admin/hunting/targets/${target.id}`, huntingTargetPayload(new FormData(event.currentTarget))); } catch { setError("Проверьте формат JSON строк добычи."); } }}>
+        {selectedTarget && [selectedTarget].map((target) => <form className="admin-editor admin-form" key={target.id} onSubmit={(event) => { event.preventDefault(); void mutate(`/api/admin/hunting/targets/${target.id}`, huntingTargetPayload(new FormData(event.currentTarget), target)); }}>
           <h3>{target.name}</h3><AdminGroup title="Основное" wide><label>Название<input name="name" defaultValue={target.name} maxLength={120} required /></label><label>Описание<textarea name="description" defaultValue={target.description} maxLength={500} required /></label></AdminGroup>
           <AdminGroup title="Доступ и здоровье"><NumberField name="minimumHuntingLevel" label="Уровень охоты" value={target.minimumHuntingLevel} min={1} max={20} /><NumberField name="energyCost" label="Энергия" value={target.energyCost} min={1} /><NumberField name="health" label="Здоровье" value={target.health} min={1} /></AdminGroup>
           <AdminGroup title="Характеристики">
@@ -241,8 +244,8 @@ export default function AdminPage() {
           </AdminGroup><AdminGroup title="Оружие и защита">
           <label>Оружие<input name="weaponName" defaultValue={target.weaponName} maxLength={120} required /></label><NumberField name="weaponDamage" label="Damage" value={target.weaponDamage} min={1} max={1000} step="0.01" /><NumberField name="weaponAccuracy" label="Accuracy" value={target.weaponAccuracy} min={0} max={100} step="0.01" />
           <NumberField name="clipSize" label="Магазин" value={target.clipSize} min={0} max={1000} /><NumberField name="rateOfFireMin" label="RoF от" value={target.rateOfFireMin} min={0} max={1000} /><NumberField name="rateOfFireMax" label="RoF до" value={target.rateOfFireMax} min={0} max={1000} /><NumberField name="spareClips" label="Запасных магазинов" value={target.spareClips} min={0} max={3} />
-          <NumberField name="armor" label="Armor" value={target.armor} min={0} max={100} step="0.01" /><label>Покрытие (JSON)<textarea name="armorCoverage" defaultValue={target.armorCoverage} required /></label></AdminGroup>
-          <AdminGroup title="Награды и добыча"><NumberField name="rewardCredits" label="Базовые кредиты" value={target.rewardCredits} min={0} max={MAX_ECONOMY_VALUE} /><NumberField name="minimumCredits" label="Дополнительные кредиты от" value={target.minimumCredits} min={0} max={MAX_ECONOMY_VALUE} /><NumberField name="maximumCredits" label="Дополнительные кредиты до" value={target.maximumCredits} min={0} max={MAX_ECONOMY_VALUE} /><NumberField name="rewardExperience" label="Общий опыт" value={target.rewardExperience} min={0} max={MAX_ECONOMY_VALUE} /><NumberField name="rewardHuntingExperience" label="Опыт охоты" value={target.rewardHuntingExperience} min={0} max={MAX_ECONOMY_VALUE} /><label>Строки добычи (JSON: itemId, chancePercent, minimumQuantity, maximumQuantity)<textarea name="lootRows" defaultValue={JSON.stringify(target.lootRows.map(({ itemId, chancePercent, minimumQuantity, maximumQuantity }) => ({ itemId, chancePercent, minimumQuantity, maximumQuantity })), null, 2)} required /></label><p>Предметы: {items.map((item) => `${item.name} — ${item.id}`).join("; ")}</p><CheckField name="isActive" label="Активен" checked={target.isActive} /></AdminGroup><AdminActions><ReasonField /><button className="primary-button" type="submit">Сохранить робота</button></AdminActions>
+          <p>Защита по зонам настраивается в <button type="button" className="text-button" onClick={() => { const npc = npcs.find((value) => value.id === target.id); if (npc) { setNpcCategory(npc.category); setSelectedNpcId(npc.id); setTab("npcs"); } }}>карточке НПЦ</button>.</p></AdminGroup>
+          <AdminGroup title="Награды и добыча"><NumberField name="rewardCredits" label="Базовые кредиты" value={target.rewardCredits} min={0} max={MAX_ECONOMY_VALUE} /><NumberField name="minimumCredits" label="Дополнительные кредиты от" value={target.minimumCredits} min={0} max={MAX_ECONOMY_VALUE} /><NumberField name="maximumCredits" label="Дополнительные кредиты до" value={target.maximumCredits} min={0} max={MAX_ECONOMY_VALUE} /><NumberField name="rewardExperience" label="Общий опыт" value={target.rewardExperience} min={0} max={MAX_ECONOMY_VALUE} /><NumberField name="rewardHuntingExperience" label="Опыт охоты" value={target.rewardHuntingExperience} min={0} max={MAX_ECONOMY_VALUE} /><p>Добыча настраивается в <button type="button" className="text-button" onClick={() => { const npc = npcs.find((value) => value.id === target.id); if (npc) { setNpcCategory(npc.category); setSelectedNpcId(npc.id); setTab("npcs"); } }}>карточке НПЦ «{target.name}»</button>.</p><CheckField name="isActive" label="Активен" checked={target.isActive} /></AdminGroup><AdminActions><ReasonField /><button className="primary-button" type="submit">Сохранить робота</button></AdminActions>
         </form>)}
       </AdminSection>}
 
@@ -268,8 +271,8 @@ export default function AdminPage() {
             <button key={value} type="button" className={npcCategory === value ? "selected" : ""} onClick={() => { setNpcCategory(value); setSelectedNpcId(null); }}>{label}</button>)}
         </nav>
         <AdminRecordList rows={npcs.filter((npc) => npc.category === npcCategory).map((npc) => ({ id: npc.id, title: npc.name, detail: `${npc.portraitPath ? "Портрет задан" : "Портрет: заглушка"} · ${npc.source === "hunting" ? "В охоте" : "Шаблон"} · ${npc.isActive ? "активен" : "отключён"}` }))} selectedId={selectedNpcId} onSelect={setSelectedNpcId} createLabel="Новый НПЦ" onCreate={() => setSelectedNpcId("new")} />
-        {selectedNpcId === "new" && <NpcEditor key={`new-${npcCategory}`} category={npcCategory} onSubmit={(event) => void saveNpc(event)} />}
-        {selectedNpc && <NpcEditor key={selectedNpc.id} category={npcCategory} npc={selectedNpc} onSubmit={(event) => void saveNpc(event, selectedNpc.id)} />}
+        {selectedNpcId === "new" && <NpcEditor key={`new-${npcCategory}`} category={npcCategory} items={items} onSubmit={(event) => void saveNpc(event)} />}
+        {selectedNpc && <NpcEditor key={selectedNpc.id} category={npcCategory} npc={selectedNpc} items={items} onSubmit={(event) => void saveNpc(event, selectedNpc.id)} />}
       </AdminSection>}
 
       {tab === "logs" && <AdminSection title="Журналы"><nav className="admin-subtabs" aria-label="Вид журнала"><button type="button" className={logTab === "actions" ? "selected" : ""} onClick={() => { setLogTab("actions"); setSelectedLogId(null); }}>Действия игроков</button><button type="button" className={logTab === "audits" ? "selected" : ""} onClick={() => { setLogTab("audits"); setSelectedLogId(null); }}>Изменения администратора</button></nav><AdminRecordList rows={visibleLogs.map((log) => ({ id: log.id, title: log.title, detail: new Date(log.date).toLocaleString("ru-RU") }))} selectedId={selectedLogId} onSelect={setSelectedLogId} />{selectedLog && <article className="admin-editor"><h3>{selectedLog.title}</h3><time>{new Date(selectedLog.date).toLocaleString("ru-RU")}</time>{selectedLog.comment && <p>Комментарий: {selectedLog.comment}</p>}{selectedLog.technical && <details><summary>Технические подробности</summary><pre>{JSON.stringify({ action: selectedLog.technical.action, targetType: selectedLog.technical.targetType, targetId: selectedLog.technical.targetId, oldValue: parseAuditValue(selectedLog.technical.oldValue), newValue: parseAuditValue(selectedLog.technical.newValue) }, null, 2)}</pre></details>}</article>}</AdminSection>}
@@ -281,10 +284,17 @@ function AdminSection({ title, children }: Readonly<{ title: string; children: R
 function AdminRecordList({ rows, selectedId, onSelect, createLabel, onCreate }: Readonly<{ rows: { id: string; title: string; detail: string }[]; selectedId: string | null; onSelect: (id: string) => void; createLabel?: string; onCreate?: () => void }>) { return <div className="admin-list">{onCreate && <button type="button" className={`admin-row admin-create${selectedId === "new" ? " selected" : ""}`} onClick={onCreate}>＋ {createLabel}</button>}{rows.map((row) => <button type="button" className={`admin-row${selectedId === row.id ? " selected" : ""}`} key={row.id} onClick={() => onSelect(row.id)}><span>{row.title}</span><small>{row.detail}</small></button>)}</div>; }
 function AdminGroup({ title, children, wide = false }: Readonly<{ title: string; children: React.ReactNode; wide?: boolean }>) { return <fieldset className={`admin-group${wide ? " wide" : ""}`}><legend>{title}</legend><div className="admin-group-fields">{children}</div></fieldset>; }
 function AdminActions({ children }: Readonly<{ children: React.ReactNode }>) { return <div className="admin-actions">{children}</div>; }
-function NpcEditor({ category, npc, onSubmit }: Readonly<{ category: NpcCategory; npc?: Npc; onSubmit: (event: FormEvent<HTMLFormElement>) => void }>) {
+function NpcEditor({ category, npc, items, onSubmit }: Readonly<{ category: NpcCategory; npc?: Npc; items: Item[]; onSubmit: (event: FormEvent<HTMLFormElement>) => void }>) {
   const [currentCategory, setCurrentCategory] = useState<NpcCategory>(npc?.category ?? category);
   const requiredCombat = currentCategory !== "peaceful";
-  const number = (name: "health" | "strength" | "toughness" | "reflexes" | "agility" | "weaponDamage" | "weaponAccuracy" | "armor", label: string, min: number, max: number, step?: string) => <label>{label}<input name={name} type="number" defaultValue={npc?.[name] ?? ""} min={min} max={max} step={step} required={requiredCombat} /></label>;
+  const [lootRows, setLootRows] = useState<NpcLootRow[]>(npc?.lootRows ?? []);
+  const [itemPicker, setItemPicker] = useState(false);
+  const [itemSearch, setItemSearch] = useState("");
+  const [zoneValues, setZoneValues] = useState<Record<string, NpcZone>>(() => Object.fromEntries(BODY_ZONES.map(([key]) =>
+    [key, npc?.armorZones?.[key] ?? { coverage: 0, protection: 0 }])));
+  const [allCoverage, setAllCoverage] = useState(0);
+  const [allProtection, setAllProtection] = useState(0);
+  const number = (name: "health" | "strength" | "toughness" | "reflexes" | "agility" | "weaponDamage" | "weaponAccuracy", label: string, min: number, max: number, step?: string) => <label>{label}<input name={name} type="number" defaultValue={npc?.[name] ?? ""} min={min} max={max} step={step} required={requiredCombat} /></label>;
   return <form className="admin-editor admin-form" onSubmit={onSubmit}>
     <h3>{npc ? npc.name : "Новый НПЦ"}</h3>
     {npc?.source === "hunting" && <p>Этот НПЦ настроен для охоты. Изменения имени, боевых параметров и активности действуют на будущие бои; награды и условия охоты редактируются в «Активности → Охота».</p>}
@@ -308,21 +318,51 @@ function NpcEditor({ category, npc, onSubmit }: Readonly<{ category: NpcCategory
       <label>Оружие / тип атаки<input name="weaponName" defaultValue={npc?.weaponName ?? ""} maxLength={120} required={requiredCombat} /></label>
       {number("weaponDamage", "Урон оружия", 1, 1000, "0.01")}
       {number("weaponAccuracy", "Точность", 0, 100, "0.01")}
-      {number("armor", "Защита", 0, 100, "0.01")}
-      <label>Покрытие защиты (JSON)<textarea name="armorCoverage" defaultValue={npc?.armorCoverage ?? (requiredCombat ? "{}" : "")} required={requiredCombat} /></label>
     </AdminGroup>
+    {(requiredCombat || npc?.health != null) && <AdminGroup title="Защита по зонам тела" wide>
+      <p>Покрытие — шанс срабатывания; защита — снижение урона при срабатывании. При покрытии 0 защита не действует.</p>
+      <div className="npc-zone-table"><div className="npc-table-head"><span>Зона тела</span><span>Покрытие, %</span><span>Защита, %</span></div>
+        {BODY_ZONES.map(([key, label]) => <div className="npc-zone-row" key={key}><strong>{label}</strong>
+          <input aria-label={`${label}: покрытие, %`} name={`zoneCoverage-${key}`} type="number" min={0} max={100} step="0.01" required value={zoneValues[key].coverage} onChange={(event) => setZoneValues({ ...zoneValues, [key]: { ...zoneValues[key], coverage: Number(event.target.value) } })} />
+          <input aria-label={`${label}: защита, %`} name={`zoneProtection-${key}`} type="number" min={0} max={100} step="0.01" required value={zoneValues[key].protection} onChange={(event) => setZoneValues({ ...zoneValues, [key]: { ...zoneValues[key], protection: Number(event.target.value) } })} /></div>)}
+      </div>
+      <div className="npc-apply-all"><label>Покрытие, %<input aria-label="Покрытие для всех зон" type="number" min={0} max={100} step="0.01" value={allCoverage} onChange={(event) => setAllCoverage(Number(event.target.value))} /></label>
+        <label>Защита, %<input aria-label="Защита для всех зон" type="number" min={0} max={100} step="0.01" value={allProtection} onChange={(event) => setAllProtection(Number(event.target.value))} /></label>
+        <button type="button" className="secondary-button" onClick={() => setZoneValues(Object.fromEntries(BODY_ZONES.map(([key]) => [key, { coverage: allCoverage, protection: allProtection }] )))}>Применить ко всем зонам</button></div>
+    </AdminGroup>}
+    {(requiredCombat || npc?.health != null) && <AdminGroup title="Добыча" wide>
+      <p>Каждая строка разыгрывается отдельно. Сумма шансов может быть больше 100%. Удаление строки не удаляет предмет.</p>
+      <div className="npc-loot-table"><div className="npc-table-head"><span>Предмет</span><span>Шанс выпадения, %</span><span>Количество от</span><span>Количество до</span><span>Убрать</span></div>
+        {lootRows.map((row, index) => <div className="npc-loot-row" key={row.itemId}>
+          <strong>{items.find((item) => item.id === row.itemId)?.name ?? row.itemName}</strong><input type="hidden" name={`lootItem-${index}`} value={row.itemId} />
+          <input aria-label={`${row.itemName}: шанс выпадения, %`} name={`lootChance-${index}`} type="text" inputMode="decimal" defaultValue={row.chancePercent.toString().replace(".", ",")} pattern="(?:100(?:[,.]0{1,3})?|\d{1,2}(?:[,.]\d{1,3})?)" required />
+          <input aria-label={`${row.itemName}: количество от`} name={`lootMin-${index}`} type="number" min={1} max={100} step={1} defaultValue={row.minimumQuantity} required />
+          <input aria-label={`${row.itemName}: количество до`} name={`lootMax-${index}`} type="number" min={1} max={100} step={1} defaultValue={row.maximumQuantity} required />
+          <button type="button" className="secondary-button" onClick={() => setLootRows(lootRows.filter((value) => value.itemId !== row.itemId))}>Убрать</button></div>)}
+      </div>
+      <input type="hidden" name="lootCount" value={lootRows.length} />
+      <button type="button" className="secondary-button" onClick={() => setItemPicker(!itemPicker)}>Добавить предмет</button>
+      {itemPicker && <div className="npc-item-picker"><label>Поиск предмета<input value={itemSearch} onChange={(event) => setItemSearch(event.target.value)} placeholder="Название предмета" /></label><div className="npc-item-results">{items.filter((item) => item.name.toLocaleLowerCase("ru").includes(itemSearch.toLocaleLowerCase("ru")) && !lootRows.some((row) => row.itemId === item.id)).map((item) => <button type="button" key={item.id} onClick={() => { setLootRows([...lootRows, { itemId: item.id, itemName: item.name, chancePercent: 0, minimumQuantity: 1, maximumQuantity: 1 }]); setItemPicker(false); setItemSearch(""); }}>{item.name}</button>)}</div></div>}
+    </AdminGroup>}
     <AdminActions><ReasonField /><button className="primary-button" type="submit">{npc ? "Сохранить НПЦ" : "Создать НПЦ"}</button></AdminActions>
   </form>;
 }
 function npcPayload(form: FormData, fallbackCategory: NpcCategory) {
   const nullableNumber = (name: string) => { const raw = String(form.get(name) ?? "").trim(); return raw === "" ? null : Number(raw); };
   const nullableText = (name: string) => String(form.get(name) ?? "").trim() || null;
+  const combat = String(form.get("zoneCoverage-head") ?? "") !== "";
+  const armorZones = combat ? Object.fromEntries(BODY_ZONES.map(([key]) => [key, { coverage: Number(form.get(`zoneCoverage-${key}`)), protection: Number(form.get(`zoneProtection-${key}`)) }])) : null;
+  const lootRows = Array.from({ length: Number(form.get("lootCount") ?? 0) }, (_, index) => {
+    const rawChance = String(form.get(`lootChance-${index}`) ?? "").trim().replace(",", ".");
+    if (!/^(?:100(?:\.0{1,3})?|\d{1,2}(?:\.\d{1,3})?)$/.test(rawChance)) throw new Error("Шанс выпадения: введите от 0 до 100% с точностью до 0,001%.");
+    return { itemId: form.get(`lootItem-${index}`), chancePercent: Number(rawChance), minimumQuantity: Number(form.get(`lootMin-${index}`)), maximumQuantity: Number(form.get(`lootMax-${index}`)) };
+  });
   return { category: form.get("category") ?? fallbackCategory, name: form.get("name"), description: form.get("description"),
     isActive: form.get("isActive") === "on", portraitPath: nullableText("portraitPath"), figurePath: nullableText("figurePath"),
     health: nullableNumber("health"), strength: nullableNumber("strength"), toughness: nullableNumber("toughness"),
     reflexes: nullableNumber("reflexes"), agility: nullableNumber("agility"), weaponName: nullableText("weaponName"),
     weaponDamage: nullableNumber("weaponDamage"), weaponAccuracy: nullableNumber("weaponAccuracy"),
-    armor: nullableNumber("armor"), armorCoverage: nullableText("armorCoverage"), reason: form.get("reason") };
+    armor: combat ? 0 : null, armorCoverage: combat ? "{}" : null, armorZones, lootRows, reason: form.get("reason") };
 }
 function NumberField({ name, label, value, min, max, step }: Readonly<{ name: string; label: string; value: number; min?: number; max?: number; step?: string }>) { return <label>{label}<input name={name} type="number" defaultValue={value} min={min} max={max} step={step} required /></label>; }
 function HuntingSetupFields() { const field = (name: string, label: string, min: number, max: number) =>
@@ -391,4 +431,4 @@ function ItemDefinitionFields({ item }: Readonly<{ item?: Item }>) { return <>
 </>; }
 function itemUpdatePayload(form: FormData) { return { price: Number(form.get("price")), description: form.get("description"), effectResource: form.get("effectResource"), effectAmount: Number(form.get("effectAmount")), cooldownSeconds: Number(form.get("cooldownSeconds")), cooldownGroup: form.get("cooldownGroup"), minimumDamage: Number(form.get("minimumDamage")), maximumDamage: Number(form.get("maximumDamage")), minimumAccuracy: Number(form.get("minimumAccuracy")), maximumAccuracy: Number(form.get("maximumAccuracy")), minimumArmor: Number(form.get("minimumArmor")), maximumArmor: Number(form.get("maximumArmor")), armorCoverage: form.get("armorCoverage"), caliber: form.get("caliber"), clipSize: Number(form.get("clipSize")), rateOfFireMin: Number(form.get("rateOfFireMin")), rateOfFireMax: Number(form.get("rateOfFireMax")), isActive: form.get("isActive") === "on", reason: form.get("reason") }; }
 function itemCreatePayload(form: FormData) { return { name: form.get("name"), type: form.get("type"), allowedSlots: form.get("allowedSlots"), ...itemUpdatePayload(form) }; }
-function huntingTargetPayload(form: FormData) { const number = (name: string) => Number(form.get(name)); return { name: form.get("name"), description: form.get("description"), minimumHuntingLevel: number("minimumHuntingLevel"), energyCost: number("energyCost"), health: number("health"), strength: number("strength"), reflexes: number("reflexes"), toughness: number("toughness"), agility: number("agility"), weaponName: form.get("weaponName"), weaponDamage: number("weaponDamage"), weaponAccuracy: number("weaponAccuracy"), clipSize: number("clipSize"), rateOfFireMin: number("rateOfFireMin"), rateOfFireMax: number("rateOfFireMax"), spareClips: number("spareClips"), armor: number("armor"), armorCoverage: form.get("armorCoverage"), rewardCredits: number("rewardCredits"), minimumCredits: number("minimumCredits"), maximumCredits: number("maximumCredits"), lootRows: JSON.parse(String(form.get("lootRows"))), rewardExperience: number("rewardExperience"), rewardHuntingExperience: number("rewardHuntingExperience"), isActive: form.get("isActive") === "on", reason: form.get("reason") }; }
+function huntingTargetPayload(form: FormData, target: HuntingTarget) { const number = (name: string) => Number(form.get(name)); return { name: form.get("name"), description: form.get("description"), minimumHuntingLevel: number("minimumHuntingLevel"), energyCost: number("energyCost"), health: number("health"), strength: number("strength"), reflexes: number("reflexes"), toughness: number("toughness"), agility: number("agility"), weaponName: form.get("weaponName"), weaponDamage: number("weaponDamage"), weaponAccuracy: number("weaponAccuracy"), clipSize: number("clipSize"), rateOfFireMin: number("rateOfFireMin"), rateOfFireMax: number("rateOfFireMax"), spareClips: number("spareClips"), armor: target.armor, armorCoverage: target.armorCoverage, rewardCredits: number("rewardCredits"), minimumCredits: number("minimumCredits"), maximumCredits: number("maximumCredits"), lootRows: null, rewardExperience: number("rewardExperience"), rewardHuntingExperience: number("rewardHuntingExperience"), isActive: form.get("isActive") === "on", reason: form.get("reason") }; }

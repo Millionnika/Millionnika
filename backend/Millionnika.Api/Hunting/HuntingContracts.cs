@@ -18,7 +18,8 @@ public sealed record HuntEquipmentResponse(
     string Slot, string Type, string Name, decimal Damage, decimal Accuracy, decimal Armor,
     IReadOnlyDictionary<string, decimal> Coverage);
 public sealed record HuntProtectionResponse(
-    string Source, decimal Armor, IReadOnlyDictionary<string, decimal> Coverage);
+    string Source, decimal Armor, IReadOnlyDictionary<string, decimal> Coverage,
+    IReadOnlyDictionary<string, decimal>? ZoneProtection = null);
 public sealed record HuntLootResponse(Guid ItemId, string Name, string Type, int Quantity);
 public sealed record HuntFightResponse(
     Guid FightId, Guid RequestId, bool Replayed, string Status, int Turn, int MaximumTurns,

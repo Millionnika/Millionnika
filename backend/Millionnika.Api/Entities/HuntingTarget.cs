@@ -25,6 +25,7 @@ public sealed class HuntingTarget
     public int SpareClips { get; set; }
     public decimal Armor { get; set; }
     public string ArmorCoverage { get; set; } = "{}";
+    public string ArmorZones { get; set; } = "{}";
     public long RewardCredits { get; set; }
     public long MinimumCredits { get; set; }
     public long MaximumCredits { get; set; }

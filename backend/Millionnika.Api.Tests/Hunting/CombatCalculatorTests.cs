@@ -50,6 +50,32 @@ public sealed class CombatCalculatorTests
     }
 
     [Fact]
+    public void ZoneProtection_AppliesOnlyCoveredZoneAndNeverAddsLegacyArmor()
+    {
+        var calculator = new CombatCalculator(Options.Create(Settings()), new SequenceRandom(0, 0, 0));
+        var armor = new[] { new CombatArmor(20, new() { ["head"] = 100 }, new() { ["head"] = 70 }) };
+        var hit = calculator.Attack(new(100, 10, 10, 10), new(10, 10, 10, 10),
+            new("melee", "Тест", 10, 100, "", 0, 0, 0, 0, 0), armor);
+        Assert.Equal(70, hit.Armor);
+    }
+
+    [Fact]
+    public void ZoneProtection_ZeroCoverageDoesNotProtectAndOldSnapshotStillWorks()
+    {
+        var newArmor = new CombatArmor(0, new() { ["head"] = 0, ["chest"] = 100 },
+            new() { ["head"] = 80, ["chest"] = 25 });
+        var hit = new CombatCalculator(Options.Create(Settings()), new SequenceRandom(0, 0))
+            .Attack(new(100, 10, 10, 10), new(10, 10, 10, 10),
+                new("melee", "Тест", 10, 100, "", 0, 0, 0, 0, 0), [newArmor]);
+        Assert.Equal(0, hit.Armor);
+        var old = System.Text.Json.JsonSerializer.Deserialize<CombatArmor>("{\"armor\":30,\"coverage\":{\"head\":100}}", CombatJson.Options)!;
+        var oldHit = new CombatCalculator(Options.Create(Settings()), new SequenceRandom(0, 0, 0))
+            .Attack(new(100, 10, 10, 10), new(10, 10, 10, 10),
+                new("melee", "Тест", 10, 100, "", 0, 0, 0, 0, 0), [old]);
+        Assert.Equal(30, oldHit.Armor);
+    }
+
+    [Fact]
     public void FirearmConsumesRemainingRoundsBelowMinimumRate()
     {
         var random = new SequenceRandom(0.9, 0, 0);

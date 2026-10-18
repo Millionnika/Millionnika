@@ -144,7 +144,7 @@ public sealed class HuntingService(
         var snapshot = new HuntSnapshot(target.Id, target.Name, target.EnergyCost, requiredLevel, character.HuntingLevel,
             character.MaxHealth, Stats(character), armor, target.Health,
             new(target.Strength, target.Reflexes, target.Toughness, target.Agility), robotWeapon.ToCombat(),
-            target.Armor > 0 ? [new CombatArmor(target.Armor, ReadCoverage(target.ArmorCoverage))] : [],
+            [ReadNpcArmor(target)],
             target.RewardCredits, target.RewardExperience, target.RewardHuntingExperience, playerName, playerEquipment,
             target.MinimumCredits, target.MaximumCredits,
             target.LootRows.OrderBy(value => value.Id).Select(value => new HuntLootSnapshot(value.ItemId,
@@ -428,7 +428,7 @@ public sealed class HuntingService(
                 snapshot.RobotWeapon.Accuracy, 0, new Dictionary<string, decimal>())
         };
         var robotProtection = snapshot.RobotArmor
-            .Select(value => new HuntProtectionResponse("natural", value.Armor, value.Coverage)).ToList();
+            .Select(value => new HuntProtectionResponse("natural", value.Armor, value.Coverage, value.ZoneProtection)).ToList();
         return new(fight.Id, requestId, replayed, fight.Status, fight.Turn, settings.MaximumTurns,
             fight.PlayerHealth, snapshot.PlayerMaximumHealth, fight.RobotHealth, snapshot.RobotMaximumHealth,
             fight.ExpiresAtUtc, fight.Status == "active" ? fight.LastActionAtUtc?.AddSeconds(settings.ActionCooldownSeconds) : null,
@@ -447,6 +447,15 @@ public sealed class HuntingService(
     private static HuntState ReadState(HuntFight fight) => JsonSerializer.Deserialize<HuntState>(fight.StateJson, CombatJson.Options)!;
     private static List<string> ReadLog(HuntFight fight) => JsonSerializer.Deserialize<List<string>>(fight.LogJson, CombatJson.Options) ?? [];
     private static Dictionary<string, decimal> ReadCoverage(string json) => JsonSerializer.Deserialize<Dictionary<string, decimal>>(json, CombatJson.Options) ?? [];
+
+    private static CombatArmor ReadNpcArmor(HuntingTarget target)
+    {
+        var zones = NpcZoneArmor.Read(target.ArmorZones);
+        if (!NpcZoneArmor.IsValid(zones)) return new CombatArmor(target.Armor, ReadCoverage(target.ArmorCoverage));
+        return new CombatArmor(target.Armor,
+            zones.ToDictionary(pair => pair.Key, pair => pair.Value.Coverage),
+            zones.ToDictionary(pair => pair.Key, pair => pair.Value.Protection));
+    }
     private static HuntEquipmentResponse EquipmentResponse(HuntEquipmentSnapshot value) =>
         new(value.Slot, value.Type, value.Name, value.Damage, value.Accuracy, value.Armor, value.Coverage);
     private static CombatStats Stats(GameCharacter value) => new(value.Strength, value.Reflexes, value.Toughness, value.Agility);
