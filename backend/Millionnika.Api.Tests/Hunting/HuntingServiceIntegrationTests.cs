@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
 using Millionnika.Api.Configuration;
+using Millionnika.Api.Admin;
 using Millionnika.Api.Data;
 using Millionnika.Api.Entities;
 using Millionnika.Api.Game;
@@ -22,6 +23,135 @@ public sealed class HuntingServiceIntegrationTests
     private static readonly Guid MeleeId = Guid.Parse("22222222-2222-2222-2222-222222222003");
     private static readonly Guid BodyArmorId = Guid.Parse("22222222-2222-2222-2222-222222222005");
     private static readonly Guid AmmunitionId = Guid.Parse("33333333-3333-3333-3333-333333333001");
+    private static readonly Guid ScrapId = Guid.Parse("66666666-6666-6666-6666-666666666001");
+    private static readonly Guid ComponentsId = Guid.Parse("66666666-6666-6666-6666-666666666002");
+    private static readonly Guid SparkId = Guid.Parse("22222222-2222-2222-2222-222222222002");
+
+    [Fact]
+    public async Task AdminLootConfiguration_ValidatesPrecisionAndAuditsChanges()
+    {
+        var admin = CreateUser(); admin.Role = "Admin";
+        var targetId = await CreateLootTargetAsync(admin, [(ScrapId, 60m, 1, 2)]);
+        try
+        {
+            await using var db = TestDatabase.CreateDbContext();
+            var target = await db.HuntingTargets.AsNoTracking().SingleAsync(value => value.Id == targetId);
+            var service = new AdminService(db, new ResourceRecoveryService(Options.Create(
+                new ResourceRecoveryOptions { EnergyAmount = 5, EnergyIntervalMinutes = 15,
+                    NerveAmount = 1, NerveIntervalMinutes = 5 }), Clock));
+            var before = Assert.Single(await service.GetHuntingTargetsAsync(default), value => value.Id == targetId);
+            Assert.Equal(60m, Assert.Single(before.LootRows).ChancePercent);
+            var request = new UpdateHuntingTargetRequest(target.LocationId, target.Name, target.Description,
+                target.MinimumHuntingLevel, target.EnergyCost, target.Health, target.Strength, target.Reflexes,
+                target.Toughness, target.Agility, target.WeaponName, target.WeaponDamage, target.WeaponAccuracy,
+                target.ClipSize, target.RateOfFireMin, target.RateOfFireMax, target.SpareClips,
+                target.Armor, target.ArmorCoverage, target.RewardCredits, target.RewardExperience,
+                target.RewardHuntingExperience, target.IsActive, "Тест настройки добычи", 3, 5,
+                [new(SparkId, .001m, 1, 1)]);
+            Assert.False((await service.UpdateHuntingTargetAsync(admin.Id, targetId,
+                request with { LootRows = [new(SparkId, .0001m, 1, 1)] }, default)).Succeeded);
+            Assert.True((await service.UpdateHuntingTargetAsync(admin.Id, targetId, request, default)).Succeeded);
+            var after = Assert.Single(await service.GetHuntingTargetsAsync(default), value => value.Id == targetId);
+            Assert.Equal((3, 5), (after.MinimumCredits, after.MaximumCredits));
+            Assert.Equal(.001m, Assert.Single(after.LootRows).ChancePercent);
+            var audit = await db.AdminAuditLogs.SingleAsync(value => value.AdminUserId == admin.Id && value.TargetId == targetId.ToString());
+            Assert.Contains("60", audit.OldValue);
+            Assert.Contains("0.001", audit.NewValue);
+        }
+        finally
+        {
+            await using var cleanup = TestDatabase.CreateDbContext();
+            await cleanup.AdminAuditLogs.Where(value => value.AdminUserId == admin.Id).ExecuteDeleteAsync();
+            await DeleteLootFixtureAsync(admin.Id, targetId);
+        }
+    }
+
+    [Fact]
+    public async Task VictoryLoot_IndependentRowsCreditsAndReplaySurviveRestart()
+    {
+        Clock.Set(DateTimeOffset.Parse("2026-10-11T04:00:00Z"));
+        var user = CreateUser();
+        var target = await CreateLootTargetAsync(user, [
+            (ScrapId, 60m, 1, 2), (ComponentsId, 15m, 1, 1), (SparkId, .001m, 1, 1)]);
+        try
+        {
+            await using (var setup = TestDatabase.CreateDbContext())
+            {
+                setup.InventoryItems.Add(new PlayerInventoryItem { Id = Guid.NewGuid(), CharacterId = user.Character!.Id,
+                    ItemId = ScrapId, Quantity = 3 });
+                await setup.SaveChangesAsync();
+            }
+            var startId = Guid.NewGuid();
+            await using (var db = TestDatabase.CreateDbContext())
+                Assert.Equal(200, (await Service(db, new InstantVictoryCombat()).StartAsync(user.Id,
+                    new(startId, target), default)).StatusCode);
+
+            var turnId = Guid.NewGuid();
+            var roller = new SequenceLootRoller(3, 1, 2, 1, 1, 1, 1);
+            HuntFightResponse result;
+            await using (var db = TestDatabase.CreateDbContext())
+                result = (await Service(db, new InstantVictoryCombat(), roller).TurnAsync(user.Id,
+                    new(turnId, "attack", EquipmentSlots.Melee), default)).Response;
+            Assert.Equal("won", result.Status);
+            Assert.Equal(8, result.CreditsAwarded); // Existing fixed five plus three extra.
+            Assert.Equal(3, result.Loot!.Count);
+            Assert.Contains(result.Loot, value => value.ItemId == ScrapId && value.Quantity == 2);
+            Assert.Contains(result.Loot, value => value.ItemId == ComponentsId && value.Quantity == 1);
+            Assert.Contains(result.Loot, value => value.ItemId == SparkId && value.Quantity == 1);
+            Assert.Contains(result.Log, value => value.Contains("Добыча: Металлолом ×2"));
+
+            await using (var db = TestDatabase.CreateDbContext())
+            {
+                var replay = await Service(db, new InstantVictoryCombat(), new SequenceLootRoller()).TurnAsync(user.Id,
+                    new(turnId, "attack", EquipmentSlots.Melee), default);
+                Assert.True(replay.Response.Replayed);
+                Assert.Equal(result.Loot, replay.Response.Loot);
+                var restored = await Service(db, new InstantVictoryCombat()).GetCurrentFightAsync(user.Id, default);
+                Assert.Equal(result.Loot, restored!.Loot);
+                Assert.Equal(8, restored.CreditsAwarded);
+            }
+            await using var verify = TestDatabase.CreateDbContext();
+            Assert.Equal(108, await verify.Characters.Where(value => value.Id == user.Character!.Id)
+                .Select(value => value.Credits).SingleAsync());
+            Assert.Equal(5, await verify.InventoryItems.Where(value => value.CharacterId == user.Character.Id && value.ItemId == ScrapId)
+                .Select(value => value.Quantity).SingleAsync());
+            Assert.Equal(1, await verify.InventoryItems.Where(value => value.CharacterId == user.Character.Id && value.ItemId == ComponentsId)
+                .Select(value => value.Quantity).SingleAsync());
+            var spark = Assert.Single(await verify.EquipmentInstances.Where(value => value.CharacterId == user.Character.Id && value.ItemId == SparkId).ToListAsync());
+            Assert.True(spark.Damage >= 1);
+            Assert.False(spark.EquippedSlot?.Length > 0);
+        }
+        finally { await DeleteLootFixtureAsync(user.Id, target); }
+    }
+
+    [Fact]
+    public async Task VictoryLoot_NoDropAndParallelRequestDoNotAwardTwice()
+    {
+        Clock.Set(DateTimeOffset.Parse("2026-10-11T05:00:00Z"));
+        var user = CreateUser();
+        var target = await CreateLootTargetAsync(user, [(ScrapId, 0m, 1, 2)], 2, 2);
+        try
+        {
+            await using (var db = TestDatabase.CreateDbContext())
+                Assert.Equal(200, (await Service(db, new InstantVictoryCombat()).StartAsync(user.Id,
+                    new(Guid.NewGuid(), target), default)).StatusCode);
+            var turnId = Guid.NewGuid();
+            await using var first = TestDatabase.CreateDbContext();
+            await using var second = TestDatabase.CreateDbContext();
+            var results = await Task.WhenAll(
+                Service(first, new InstantVictoryCombat()).TurnAsync(user.Id, new(turnId, "attack", EquipmentSlots.Melee), default),
+                Service(second, new InstantVictoryCombat()).TurnAsync(user.Id, new(turnId, "attack", EquipmentSlots.Melee), default));
+            Assert.All(results, value => Assert.Equal(200, value.StatusCode));
+            Assert.Single(results, value => value.Response.Replayed);
+            Assert.All(results, value => Assert.Empty(value.Response.Loot!));
+            await using var verify = TestDatabase.CreateDbContext();
+            Assert.Equal(1, await verify.HuntFights.CountAsync(value => value.CharacterId == user.Character!.Id && value.Status == "won"));
+            Assert.Equal(1, await verify.ActionLogs.CountAsync(value => value.UserId == user.Id && value.ActionType == "hunt_result"));
+            Assert.Equal(0, await verify.InventoryItems.CountAsync(value => value.CharacterId == user.Character!.Id && value.ItemId == ScrapId));
+            Assert.Equal(107, await verify.Characters.Where(value => value.Id == user.Character!.Id).Select(value => value.Credits).SingleAsync());
+        }
+        finally { await DeleteLootFixtureAsync(user.Id, target); }
+    }
 
     [Fact]
     public async Task Start_DistinguishesMissingWeaponFromMissingCompatibleAmmunition()
@@ -330,11 +460,50 @@ public sealed class HuntingServiceIntegrationTests
     }
 
     private static readonly MutableTimeProvider Clock = new(DateTimeOffset.Parse("2026-10-11T00:00:00Z"));
-    private static HuntingService Service(GameDbContext db, ICombatCalculator? combat = null)
+    private static async Task<Guid> CreateLootTargetAsync(User user,
+        IReadOnlyList<(Guid ItemId, decimal Chance, int Minimum, int Maximum)> rows,
+        long minimumCredits = 2, long maximumCredits = 4)
+    {
+        await using var db = TestDatabase.CreateDbContext();
+        var locationId = await db.HuntingTargets.Where(value => value.Id == TargetId)
+            .Select(value => value.LocationId).SingleAsync();
+        var id = Guid.NewGuid();
+        db.Users.Add(user);
+        db.EquipmentInstances.Add(new EquipmentInstance { Id = Guid.NewGuid(), CharacterId = user.Character!.Id,
+            ItemId = MeleeId, Damage = 16, Accuracy = 100, EquippedSlot = EquipmentSlots.Melee, CreatedAtUtc = Clock.GetUtcNow() });
+        db.HuntingTargets.Add(new HuntingTarget
+        {
+            Id = id, LocationId = locationId, Name = "Тестовый робот добычи", Description = "Только тестовая база",
+            MinimumHuntingLevel = 1, EnergyCost = 1, Health = 1,
+            Strength = 1, Reflexes = 1, Toughness = 1, Agility = 1,
+            WeaponName = "Тестовая лапа", WeaponDamage = 1, WeaponAccuracy = 0,
+            Armor = 0, ArmorCoverage = "{}", RewardCredits = 5,
+            MinimumCredits = minimumCredits, MaximumCredits = maximumCredits,
+            RewardExperience = 3, RewardHuntingExperience = 2, IsActive = true,
+            LootRows = rows.Select((row, index) => new HuntingLootRow
+            {
+                Id = Guid.Parse($"00000000-0000-0000-0000-{index + 1:000000000000}"),
+                ItemId = row.ItemId, ChancePercent = row.Chance,
+                MinimumQuantity = row.Minimum, MaximumQuantity = row.Maximum
+            }).ToList()
+        });
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    private static async Task DeleteLootFixtureAsync(Guid userId, Guid targetId)
+    {
+        await using var db = TestDatabase.CreateDbContext();
+        await db.Users.Where(value => value.Id == userId).ExecuteDeleteAsync();
+        await db.HuntingTargets.Where(value => value.Id == targetId).ExecuteDeleteAsync();
+    }
+
+    private static HuntingService Service(GameDbContext db, ICombatCalculator? combat = null, ILootRoller? roller = null)
     {
         var options = Options.Create(Settings());
         return new(db, combat ?? new CombatCalculator(options, new ZeroRandom()), TestProgression.Create(),
-            new ResourceRecoveryService(Options.Create(new ResourceRecoveryOptions { EnergyAmount = 5, EnergyIntervalMinutes = 15, NerveAmount = 1, NerveIntervalMinutes = 5 }), Clock), options);
+            new ResourceRecoveryService(Options.Create(new ResourceRecoveryOptions { EnergyAmount = 5, EnergyIntervalMinutes = 15, NerveAmount = 1, NerveIntervalMinutes = 5 }), Clock),
+            roller ?? new LootRoller(), new EquipmentRoller(), options);
     }
 
     private static User CreateUser()
@@ -357,6 +526,21 @@ public sealed class HuntingServiceIntegrationTests
         DamageMitigations = [0m, 10m, 20m, 30m, 40m, 50m, 57.68m, 63.14m, 70.81m, 76.26m, 80.49m, 83.95m, 86.87m, 89.40m, 91.63m, 93.63m, 95.43m, 97.08m, 98.60m, 100m]
     };
     private sealed class ZeroRandom : IRandomSource { public double NextDouble() => 0; }
+    private sealed class SequenceLootRoller(params long[] values) : ILootRoller
+    {
+        private readonly Queue<long> values = new(values);
+        public long NextInclusive(long minimum, long maximum)
+        {
+            var value = values.Dequeue();
+            Assert.InRange(value, minimum, maximum);
+            return value;
+        }
+    }
+    private sealed class InstantVictoryCombat : ICombatCalculator
+    {
+        public CombatHit Attack(CombatStats attacker, CombatStats defender, CombatWeapon weapon, IReadOnlyList<CombatArmor> armor) =>
+            new(true, "chest", 1, 0, 0, "Тестовый удар победил робота.");
+    }
     private sealed class PredictableCombat : ICombatCalculator
     {
         public CombatHit Attack(CombatStats attacker, CombatStats defender, CombatWeapon weapon, IReadOnlyList<CombatArmor> armor)

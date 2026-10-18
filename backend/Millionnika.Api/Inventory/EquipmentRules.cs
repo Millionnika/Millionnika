@@ -9,7 +9,8 @@ public static class ItemTypes
     public const string Weapon = "weapon";
     public const string Armor = "armor";
     public const string Ammunition = "ammunition";
-    public static bool IsValid(string? value) => value is Consumable or Weapon or Armor or Ammunition;
+    public const string Material = "material";
+    public static bool IsValid(string? value) => value is Consumable or Weapon or Armor or Ammunition or Material;
 }
 
 public static class EquipmentSlots
@@ -48,6 +49,8 @@ public static class EquipmentRules
         ItemTypes.Ammunition => item.AllowedSlots == string.Empty && item.EffectAmount == 0 &&
             item.EffectResource == string.Empty && RatingsAreZero(item) && item.ArmorCoverage == "{}" &&
             !string.IsNullOrWhiteSpace(item.Caliber) && item.ClipSize == 0 && item.RateOfFireMin == 0 && item.RateOfFireMax == 0,
+        ItemTypes.Material => item.AllowedSlots == string.Empty && item.EffectAmount == 0 &&
+            item.EffectResource == string.Empty && RatingsAreZero(item) && item.ArmorCoverage == "{}" && NoAmmo(item),
         ItemTypes.Weapon => ValidSlots(item.AllowedSlots, EquipmentSlots.WeaponPermanent) &&
             ValidRange(item.MinimumDamage, item.MaximumDamage, MaximumWeaponRating, requirePositive: true) &&
             ValidRange(item.MinimumAccuracy, item.MaximumAccuracy, MaximumAccuracy, requirePositive: false) &&

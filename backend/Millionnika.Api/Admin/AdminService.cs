@@ -251,7 +251,10 @@ public sealed class AdminService(
                 value.MinimumHuntingLevel, value.EnergyCost, value.Health, value.Strength, value.Reflexes, value.Toughness, value.Agility,
                 value.WeaponName, value.WeaponDamage, value.WeaponAccuracy, value.ClipSize, value.RateOfFireMin,
                 value.RateOfFireMax, value.SpareClips, value.Armor, value.ArmorCoverage, value.RewardCredits,
-                value.RewardExperience, value.RewardHuntingExperience, value.IsActive)).ToListAsync(token);
+                value.RewardExperience, value.RewardHuntingExperience, value.IsActive,
+                value.MinimumCredits, value.MaximumCredits,
+                value.LootRows.OrderBy(row => row.Id).Select(row => new AdminHuntingLootRowResponse(
+                    row.ItemId, row.Item.Name, row.ChancePercent, row.MinimumQuantity, row.MaximumQuantity)).ToList())).ToListAsync(token);
 
     public async Task<AdminMutationResult> UpdateHuntingTargetAsync(Guid adminId, Guid id, UpdateHuntingTargetRequest request, CancellationToken token)
     {
@@ -262,15 +265,33 @@ public sealed class AdminService(
             return AdminMutationResult.Failure("Локация не найдена.");
         var value = await dbContext.HuntingTargets.FromSqlInterpolated($"SELECT * FROM hunting_targets WHERE \"Id\"={id} FOR UPDATE").SingleOrDefaultAsync(token);
         if (value is null) return AdminMutationResult.Failure("Робот не найден.");
-        var old = HuntingTargetValues(value);
+        var rows = await dbContext.HuntingLootRows.Where(row => row.TargetId == id).OrderBy(row => row.Id).ToListAsync(token);
+        var requestedItemIds = request.LootRows?.Select(row => row.ItemId).ToArray();
+        if (request.LootRows is not null &&
+            (request.LootRows.Select(row => row.ItemId).Distinct().Count() != request.LootRows.Count ||
+             await dbContext.Items.CountAsync(item => requestedItemIds!.Contains(item.Id), token) != request.LootRows.Count))
+            return AdminMutationResult.Failure("Проверьте предметы и дубликаты строк добычи.");
+        var old = HuntingTargetValues(value, rows);
         value.LocationId = request.LocationId; value.Name = request.Name!.Trim(); value.Description = request.Description!.Trim();
         value.MinimumHuntingLevel = request.MinimumHuntingLevel; value.EnergyCost = request.EnergyCost; value.Health = request.Health;
         value.Strength = request.Strength; value.Reflexes = request.Reflexes; value.Toughness = request.Toughness; value.Agility = request.Agility;
         value.WeaponName = request.WeaponName!.Trim(); value.WeaponDamage = request.WeaponDamage; value.WeaponAccuracy = request.WeaponAccuracy;
         value.ClipSize = request.ClipSize; value.RateOfFireMin = request.RateOfFireMin; value.RateOfFireMax = request.RateOfFireMax; value.SpareClips = request.SpareClips;
         value.Armor = request.Armor; value.ArmorCoverage = request.ArmorCoverage!; value.RewardCredits = request.RewardCredits;
+        value.MinimumCredits = request.MinimumCredits; value.MaximumCredits = request.MaximumCredits;
         value.RewardExperience = request.RewardExperience; value.RewardHuntingExperience = request.RewardHuntingExperience; value.IsActive = request.IsActive;
-        AddAudit(adminId, "hunting_target_update", "hunting_target", id.ToString(), old, HuntingTargetValues(value), request.Reason!);
+        if (request.LootRows is not null)
+        {
+            await dbContext.HuntingLootRows.Where(row => row.TargetId == id).ExecuteDeleteAsync(token);
+            rows = request.LootRows.Select(row => new HuntingLootRow
+            {
+                Id = Guid.NewGuid(), TargetId = id, ItemId = row.ItemId,
+                ChancePercent = row.ChancePercent, MinimumQuantity = row.MinimumQuantity,
+                MaximumQuantity = row.MaximumQuantity
+            }).ToList();
+            dbContext.HuntingLootRows.AddRange(rows);
+        }
+        AddAudit(adminId, "hunting_target_update", "hunting_target", id.ToString(), old, HuntingTargetValues(value, rows), request.Reason!);
         await dbContext.SaveChangesAsync(token); await transaction.CommitAsync(token);
         return AdminMutationResult.Success("Робот обновлён.");
     }
@@ -329,14 +350,21 @@ public sealed class AdminService(
         value.RateOfFireMax <= Math.Max(value.ClipSize, 0) && value.SpareClips is >= 0 and <= 3 &&
         value.Armor is >= 0 and <= 100 && (value.Armor == 0 ? value.ArmorCoverage == "{}" : EquipmentRules.IsCoverageValid(value.ArmorCoverage)) &&
         value.RewardCredits is >= 0 and <= GameNumericLimits.MaxEconomyValue &&
+        value.MinimumCredits is >= 0 and <= GameNumericLimits.MaxEconomyValue &&
+        value.MaximumCredits >= value.MinimumCredits && value.MaximumCredits <= GameNumericLimits.MaxEconomyValue &&
+        value.LootRows is { Count: <= 30 } && value.LootRows.All(row => row.ItemId != Guid.Empty &&
+            row.ChancePercent is >= 0 and <= 100 && row.ChancePercent * 1000 == decimal.Truncate(row.ChancePercent * 1000) &&
+            row.MinimumQuantity is >= 1 and <= 100 && row.MaximumQuantity >= row.MinimumQuantity && row.MaximumQuantity <= 100) &&
         value.RewardExperience is >= 0 and <= GameNumericLimits.MaxEconomyValue &&
         value.RewardHuntingExperience is >= 0 and <= GameNumericLimits.MaxEconomyValue;
 
-    private static object HuntingTargetValues(HuntingTarget value) => new
+    private static object HuntingTargetValues(HuntingTarget value, IReadOnlyList<HuntingLootRow> rows) => new
     {
         value.LocationId, value.Name, value.Description, value.MinimumHuntingLevel, value.EnergyCost, value.Health,
         value.Strength, value.Reflexes, value.Toughness, value.Agility, value.WeaponName, value.WeaponDamage,
         value.WeaponAccuracy, value.ClipSize, value.RateOfFireMin, value.RateOfFireMax, value.SpareClips,
-        value.Armor, value.ArmorCoverage, value.RewardCredits, value.RewardExperience, value.RewardHuntingExperience, value.IsActive
+        value.Armor, value.ArmorCoverage, value.RewardCredits, value.MinimumCredits, value.MaximumCredits,
+        LootRows = rows.Select(row => new { row.ItemId, row.ChancePercent, row.MinimumQuantity, row.MaximumQuantity }).ToList(),
+        value.RewardExperience, value.RewardHuntingExperience, value.IsActive
     };
 }

@@ -24,7 +24,10 @@ public sealed class HuntingTarget
     public decimal Armor { get; set; }
     public string ArmorCoverage { get; set; } = "{}";
     public long RewardCredits { get; set; }
+    public long MinimumCredits { get; set; }
+    public long MaximumCredits { get; set; }
     public long RewardExperience { get; set; }
     public long RewardHuntingExperience { get; set; }
     public bool IsActive { get; set; }
+    public ICollection<HuntingLootRow> LootRows { get; set; } = [];
 }

@@ -15,7 +15,7 @@ type InventoryItem = {
   cooldownSeconds: number; cooldownGroup: string; cooldownAvailableAtUtc: string | null;
 };
 type ActionResult = { succeeded: boolean; message: string };
-type InventoryFilter = "all" | "weapon" | "armor" | "ammunition" | "consumable";
+type InventoryFilter = "all" | "weapon" | "armor" | "ammunition" | "consumable" | "material";
 
 const slotNames: Record<string, string> = {
   primary: "Основное оружие", secondary: "Вторичное оружие", melee: "Ближний бой", temporary: "Временное",
@@ -26,6 +26,7 @@ const armorSlots = ["helmet", "body", "pants", "gloves", "boots"] as const;
 const filters: { value: InventoryFilter; label: string }[] = [
   { value: "all", label: "Все" }, { value: "weapon", label: "Оружие" }, { value: "armor", label: "Броня" },
   { value: "ammunition", label: "Боеприпасы" }, { value: "consumable", label: "Расходники" },
+  { value: "material", label: "Материалы" },
 ];
 
 export default function InventoryPage() {
@@ -97,7 +98,7 @@ export default function InventoryPage() {
           return <article className="inventory-card" key={key}>
             <div className={`inventory-item-icon ${item.type}`} aria-hidden="true">{typeIcon(item.type)}</div>
             <div className="inventory-card-body"><div className="inventory-card-heading"><h2>{item.name}</h2><strong>{item.type === "weapon" ? `Урон ${item.damage} · Точность ${item.accuracy}` : item.type === "armor" ? `Броня ${item.armor}` : `В наличии: ${item.quantity}`}</strong></div><p>{item.description}</p>
-            {item.type === "ammunition" ? <p className="inventory-meta">Калибр: {item.caliber}</p> : item.type === "consumable" ? <div className="inventory-consume">
+            {item.type === "ammunition" ? <p className="inventory-meta">Калибр: {item.caliber}</p> : item.type === "material" ? <p className="inventory-meta">Материал для будущих систем</p> : item.type === "consumable" ? <div className="inventory-consume">
               <label><span>Количество</span><input type="number" min="1" max={item.cooldownSeconds > 0 ? 1 : Math.min(100, item.quantity)} value={item.cooldownSeconds > 0 ? 1 : quantities[item.itemId] ?? 1} disabled={item.cooldownSeconds > 0} onChange={(event) => setQuantities((current) => ({ ...current, [item.itemId]: Number(event.target.value) }))} /></label>
               <button className="primary-button compact-action" type="button" onClick={() => void useItem(item)} disabled={busyKey !== null || remaining > 0}>{busyKey === item.itemId ? "Использование…" : "Использовать"}</button>
               {remaining > 0 && <span className="inventory-meta" role="status">Доступно через {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")}</span>}
@@ -143,4 +144,4 @@ function formatCoverage(value: string) {
   catch { return "нет данных"; }
 }
 
-function typeIcon(type: string) { return ({ weapon: "W", armor: "A", ammunition: "•", consumable: "+" } as Record<string, string>)[type] ?? "?"; }
+function typeIcon(type: string) { return ({ weapon: "W", armor: "A", ammunition: "•", consumable: "+", material: "◇" } as Record<string, string>)[type] ?? "?"; }

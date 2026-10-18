@@ -425,6 +425,9 @@ namespace Millionnika.Api.Migrations
                     b.Property<DateTimeOffset?>("CompletedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<long>("CreditsAwarded")
+                        .HasColumnType("bigint");
+
                     b.Property<DateTimeOffset>("ExpiresAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -435,6 +438,10 @@ namespace Millionnika.Api.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("LogJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("LootJson")
                         .IsRequired()
                         .HasColumnType("jsonb");
 
@@ -512,6 +519,41 @@ namespace Millionnika.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Millionnika.Api.Entities.HuntingLootRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("ChancePercent")
+                        .HasPrecision(6, 3)
+                        .HasColumnType("numeric(6,3)");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("MaximumQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MinimumQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("TargetId", "ItemId")
+                        .IsUnique();
+
+                    b.ToTable("hunting_loot_rows", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_hunting_loot_rows_Values", "\"ChancePercent\" BETWEEN 0 AND 100 AND \"MinimumQuantity\" BETWEEN 1 AND 100 AND \"MaximumQuantity\" BETWEEN \"MinimumQuantity\" AND 100");
+                        });
+                });
+
             modelBuilder.Entity("Millionnika.Api.Entities.HuntingRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -586,6 +628,12 @@ namespace Millionnika.Api.Migrations
                     b.Property<Guid>("LocationId")
                         .HasColumnType("uuid");
 
+                    b.Property<long>("MaximumCredits")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("MinimumCredits")
+                        .HasColumnType("bigint");
+
                     b.Property<int>("MinimumHuntingLevel")
                         .HasColumnType("integer");
 
@@ -640,6 +688,8 @@ namespace Millionnika.Api.Migrations
 
                     b.ToTable("hunting_targets", null, t =>
                         {
+                            t.HasCheckConstraint("CK_hunting_targets_CreditRange", "\"MinimumCredits\" BETWEEN 0 AND 1000000000000 AND \"MaximumCredits\" BETWEEN \"MinimumCredits\" AND 1000000000000");
+
                             t.HasCheckConstraint("CK_hunting_targets_Level", "\"MinimumHuntingLevel\" BETWEEN 1 AND 20");
 
                             t.HasCheckConstraint("CK_hunting_targets_Values", "\"EnergyCost\" > 0 AND \"Health\" > 0 AND \"Strength\" > 0 AND \"Reflexes\" > 0 AND \"Toughness\" > 0 AND \"Agility\" > 0 AND \"RewardCredits\" BETWEEN 0 AND 1000000000000 AND \"RewardExperience\" BETWEEN 0 AND 1000000000000 AND \"RewardHuntingExperience\" BETWEEN 0 AND 1000000000000");
@@ -746,7 +796,7 @@ namespace Millionnika.Api.Migrations
 
                             t.HasCheckConstraint("CK_items_Cooldown", "\"CooldownSeconds\" BETWEEN 0 AND 86400 AND ((\"Type\" = 'consumable' AND ((\"CooldownSeconds\" = 0 AND \"CooldownGroup\" = '') OR (\"CooldownSeconds\" > 0 AND \"CooldownGroup\" <> ''))) OR (\"Type\" <> 'consumable' AND \"CooldownSeconds\" = 0 AND \"CooldownGroup\" = ''))");
 
-                            t.HasCheckConstraint("CK_items_EffectAmount", "(\"Type\" = 'consumable' AND \"EffectAmount\" > 0) OR (\"Type\" IN ('weapon','armor','ammunition') AND \"EffectAmount\" = 0)");
+                            t.HasCheckConstraint("CK_items_EffectAmount", "(\"Type\" = 'consumable' AND \"EffectAmount\" > 0) OR (\"Type\" IN ('weapon','armor','ammunition','material') AND \"EffectAmount\" = 0)");
 
                             t.HasCheckConstraint("CK_items_EquipmentRatings", "\"MinimumDamage\" BETWEEN 0 AND 1000 AND \"MaximumDamage\" BETWEEN \"MinimumDamage\" AND 1000 AND \"MinimumAccuracy\" BETWEEN 0 AND 100 AND \"MaximumAccuracy\" BETWEEN \"MinimumAccuracy\" AND 100 AND \"MinimumArmor\" BETWEEN 0 AND 100 AND \"MaximumArmor\" BETWEEN \"MinimumArmor\" AND 100");
 
@@ -1047,6 +1097,25 @@ namespace Millionnika.Api.Migrations
                     b.Navigation("Character");
                 });
 
+            modelBuilder.Entity("Millionnika.Api.Entities.HuntingLootRow", b =>
+                {
+                    b.HasOne("Millionnika.Api.Entities.Item", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Millionnika.Api.Entities.HuntingTarget", "Target")
+                        .WithMany("LootRows")
+                        .HasForeignKey("TargetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Target");
+                });
+
             modelBuilder.Entity("Millionnika.Api.Entities.HuntingRequest", b =>
                 {
                     b.HasOne("Millionnika.Api.Entities.User", null)
@@ -1107,6 +1176,11 @@ namespace Millionnika.Api.Migrations
             modelBuilder.Entity("Millionnika.Api.Entities.HuntingLocation", b =>
                 {
                     b.Navigation("Targets");
+                });
+
+            modelBuilder.Entity("Millionnika.Api.Entities.HuntingTarget", b =>
+                {
+                    b.Navigation("LootRows");
                 });
 
             modelBuilder.Entity("Millionnika.Api.Entities.Item", b =>

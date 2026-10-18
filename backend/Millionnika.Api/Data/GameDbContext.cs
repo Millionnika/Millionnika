@@ -19,6 +19,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
     public DbSet<FriendRelation> FriendRelations => Set<FriendRelation>();
     public DbSet<HuntingLocation> HuntingLocations => Set<HuntingLocation>();
     public DbSet<HuntingTarget> HuntingTargets => Set<HuntingTarget>();
+    public DbSet<HuntingLootRow> HuntingLootRows => Set<HuntingLootRow>();
     public DbSet<HuntFight> HuntFights => Set<HuntFight>();
     public DbSet<HuntingRequest> HuntingRequests => Set<HuntingRequest>();
 
@@ -104,7 +105,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
             entity.ToTable("items", table =>
             {
                 table.HasCheckConstraint("CK_items_Price", $"\"Price\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
-                table.HasCheckConstraint("CK_items_EffectAmount", "(\"Type\" = 'consumable' AND \"EffectAmount\" > 0) OR (\"Type\" IN ('weapon','armor','ammunition') AND \"EffectAmount\" = 0)");
+                table.HasCheckConstraint("CK_items_EffectAmount", "(\"Type\" = 'consumable' AND \"EffectAmount\" > 0) OR (\"Type\" IN ('weapon','armor','ammunition','material') AND \"EffectAmount\" = 0)");
                 table.HasCheckConstraint("CK_items_EquipmentRatings", "\"MinimumDamage\" BETWEEN 0 AND 1000 AND \"MaximumDamage\" BETWEEN \"MinimumDamage\" AND 1000 AND \"MinimumAccuracy\" BETWEEN 0 AND 100 AND \"MaximumAccuracy\" BETWEEN \"MinimumAccuracy\" AND 100 AND \"MinimumArmor\" BETWEEN 0 AND 100 AND \"MaximumArmor\" BETWEEN \"MinimumArmor\" AND 100");
                 table.HasCheckConstraint("CK_items_Ammo", "\"ClipSize\" BETWEEN 0 AND 1000 AND \"RateOfFireMin\" BETWEEN 0 AND 1000 AND \"RateOfFireMax\" BETWEEN \"RateOfFireMin\" AND 1000");
                 table.HasCheckConstraint("CK_items_Cooldown", "\"CooldownSeconds\" BETWEEN 0 AND 86400 AND ((\"Type\" = 'consumable' AND ((\"CooldownSeconds\" = 0 AND \"CooldownGroup\" = '') OR (\"CooldownSeconds\" > 0 AND \"CooldownGroup\" <> ''))) OR (\"Type\" <> 'consumable' AND \"CooldownSeconds\" = 0 AND \"CooldownGroup\" = ''))");
@@ -258,6 +259,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
             {
                 table.HasCheckConstraint("CK_hunting_targets_Level", "\"MinimumHuntingLevel\" BETWEEN 1 AND 20");
                 table.HasCheckConstraint("CK_hunting_targets_Values", $"\"EnergyCost\" > 0 AND \"Health\" > 0 AND \"Strength\" > 0 AND \"Reflexes\" > 0 AND \"Toughness\" > 0 AND \"Agility\" > 0 AND \"RewardCredits\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"RewardExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"RewardHuntingExperience\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue}");
+                table.HasCheckConstraint("CK_hunting_targets_CreditRange", $"\"MinimumCredits\" BETWEEN 0 AND {GameNumericLimits.MaxEconomyValue} AND \"MaximumCredits\" BETWEEN \"MinimumCredits\" AND {GameNumericLimits.MaxEconomyValue}");
                 table.HasCheckConstraint("CK_hunting_targets_Weapon", "\"WeaponDamage\" BETWEEN 1 AND 1000 AND \"WeaponAccuracy\" BETWEEN 0 AND 100 AND \"ClipSize\" BETWEEN 0 AND 1000 AND \"RateOfFireMin\" BETWEEN 0 AND 1000 AND \"RateOfFireMax\" BETWEEN \"RateOfFireMin\" AND 1000 AND \"SpareClips\" BETWEEN 0 AND 3");
             });
             entity.HasKey(value => value.Id);
@@ -269,6 +271,16 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
             entity.Property(value => value.Armor).HasPrecision(5, 2);
             entity.Property(value => value.ArmorCoverage).HasColumnType("jsonb").IsRequired();
             entity.HasOne(value => value.Location).WithMany(value => value.Targets).HasForeignKey(value => value.LocationId).OnDelete(DeleteBehavior.Restrict);
+        });
+        modelBuilder.Entity<HuntingLootRow>(entity =>
+        {
+            entity.ToTable("hunting_loot_rows", table => table.HasCheckConstraint("CK_hunting_loot_rows_Values",
+                "\"ChancePercent\" BETWEEN 0 AND 100 AND \"MinimumQuantity\" BETWEEN 1 AND 100 AND \"MaximumQuantity\" BETWEEN \"MinimumQuantity\" AND 100"));
+            entity.HasKey(value => value.Id);
+            entity.Property(value => value.ChancePercent).HasPrecision(6, 3);
+            entity.HasIndex(value => new { value.TargetId, value.ItemId }).IsUnique();
+            entity.HasOne(value => value.Target).WithMany(value => value.LootRows).HasForeignKey(value => value.TargetId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(value => value.Item).WithMany().HasForeignKey(value => value.ItemId).OnDelete(DeleteBehavior.Restrict);
         });
         modelBuilder.Entity<HuntFight>(entity =>
         {
@@ -282,6 +294,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
             entity.Property(value => value.SnapshotJson).HasColumnType("jsonb").IsRequired();
             entity.Property(value => value.StateJson).HasColumnType("jsonb").IsRequired();
             entity.Property(value => value.LogJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(value => value.LootJson).HasColumnType("jsonb").IsRequired();
             entity.HasIndex(value => value.CharacterId).IsUnique().HasFilter("\"Status\" = 'active'");
             entity.HasOne(value => value.Character).WithMany(value => value.HuntFights).HasForeignKey(value => value.CharacterId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<HuntingTarget>().WithMany().HasForeignKey(value => value.TargetId).OnDelete(DeleteBehavior.Restrict);

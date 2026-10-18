@@ -15,6 +15,8 @@ public sealed class HuntingService(
     ICombatCalculator combat,
     IProgressionService progression,
     IResourceRecoveryService recovery,
+    ILootRoller lootRoller,
+    IEquipmentRoller equipmentRoller,
     IOptions<HuntingOptions> options) : IHuntingService
 {
     private readonly HuntingOptions settings = options.Value;
@@ -58,6 +60,7 @@ public sealed class HuntingService(
 
         var active = await db.HuntFights.AnyAsync(value => value.CharacterId == character.Id && value.Status == "active", token);
         var target = await db.HuntingTargets.Include(value => value.Location)
+            .Include(value => value.LootRows).ThenInclude(value => value.Item)
             .SingleOrDefaultAsync(value => value.Id == request.TargetId && value.IsActive && value.Location.IsActive, token);
         recovery.Apply(character);
         if (active) return await RejectAsync(transaction, character, request.RequestId, "start", signature,
@@ -71,7 +74,7 @@ public sealed class HuntingService(
             "start", signature, $"Не хватает энергии: нужно ещё {target.EnergyCost - character.Energy}.", 409, token);
         if (character.Health <= 0) return await RejectAsync(transaction, character, request.RequestId, "start", signature,
             "Для охоты нужно восстановить здоровье.", 409, token);
-        var maximumCreditReward = checked((long)Math.Floor(target.RewardCredits * (1 + settings.MaximumCreditBonus)));
+        var maximumCreditReward = checked((long)Math.Floor(target.RewardCredits * (1 + settings.MaximumCreditBonus)) + target.MaximumCredits);
         if (character.Credits > GameNumericLimits.MaxEconomyValue - maximumCreditReward ||
             character.Experience > GameNumericLimits.MaxEconomyValue - target.RewardExperience ||
             character.HuntingExperience > GameNumericLimits.MaxEconomyValue - target.RewardHuntingExperience)
@@ -136,7 +139,10 @@ public sealed class HuntingService(
             character.MaxHealth, Stats(character), armor, target.Health,
             new(target.Strength, target.Reflexes, target.Toughness, target.Agility), robotWeapon.ToCombat(),
             target.Armor > 0 ? [new CombatArmor(target.Armor, ReadCoverage(target.ArmorCoverage))] : [],
-            target.RewardCredits, target.RewardExperience, target.RewardHuntingExperience, playerName, playerEquipment);
+            target.RewardCredits, target.RewardExperience, target.RewardHuntingExperience, playerName, playerEquipment,
+            target.MinimumCredits, target.MaximumCredits,
+            target.LootRows.OrderBy(value => value.Id).Select(value => new HuntLootSnapshot(value.ItemId,
+                value.Item.Name, value.Item.Type, value.ChancePercent, value.MinimumQuantity, value.MaximumQuantity)).ToList());
         var state = new HuntState(weapons, robotWeapon);
         var now = recovery.UtcNow;
         character.Energy -= target.EnergyCost;
@@ -264,7 +270,8 @@ public sealed class HuntingService(
         {
             var bonus = Math.Min(Math.Max(0, snapshot.StartingHuntingLevel - snapshot.MinimumHuntingLevel) * settings.CreditBonusPerExtraLevel,
                 settings.MaximumCreditBonus);
-            credits = checked((long)Math.Floor(snapshot.RewardCredits * (1 + bonus)));
+            var extraCredits = lootRoller.NextInclusive(snapshot.MinimumCredits ?? 0, snapshot.MaximumCredits ?? 0);
+            credits = checked((long)Math.Floor(snapshot.RewardCredits * (1 + bonus)) + extraCredits);
             experience = snapshot.RewardExperience;
             huntingExperience = snapshot.RewardHuntingExperience;
             if (character.Credits > GameNumericLimits.MaxEconomyValue - credits ||
@@ -276,6 +283,45 @@ public sealed class HuntingService(
             character.HuntingExperience += huntingExperience;
             progression.Apply(character);
             character.Health = fight.PlayerHealth;
+            fight.CreditsAwarded = credits;
+            var loot = new List<HuntLootResponse>();
+            foreach (var row in snapshot.LootRows ?? [])
+            {
+                // 0.001% is exactly one of 100000 equally likely rolls.
+                if (lootRoller.NextInclusive(1, 100000) > row.ChancePercent * 1000) continue;
+                var amount = (int)lootRoller.NextInclusive(row.MinimumQuantity, row.MaximumQuantity);
+                var item = await db.Items.AsNoTracking().SingleAsync(value => value.Id == row.ItemId, token);
+                if (item.Type is ItemTypes.Weapon or ItemTypes.Armor)
+                {
+                    if (!EquipmentRules.IsDefinitionValid(item))
+                        throw new InvalidOperationException("Loot equipment template is invalid.");
+                    for (var index = 0; index < amount; index++)
+                        db.EquipmentInstances.Add(new EquipmentInstance
+                        {
+                            Id = Guid.NewGuid(), CharacterId = character.Id, ItemId = item.Id,
+                            Damage = item.Type == ItemTypes.Weapon ? equipmentRoller.Roll(item.MinimumDamage, item.MaximumDamage) : 0,
+                            Accuracy = item.Type == ItemTypes.Weapon ? equipmentRoller.Roll(item.MinimumAccuracy, item.MaximumAccuracy) : 0,
+                            Armor = item.Type == ItemTypes.Armor ? equipmentRoller.Roll(item.MinimumArmor, item.MaximumArmor) : 0,
+                            CreatedAtUtc = recovery.UtcNow
+                        });
+                }
+                else if (item.Type is ItemTypes.Material or ItemTypes.Consumable or ItemTypes.Ammunition)
+                {
+                    var inventory = db.InventoryItems.Local.FirstOrDefault(value =>
+                        value.CharacterId == character.Id && value.ItemId == item.Id) ??
+                        await db.InventoryItems.SingleOrDefaultAsync(value =>
+                            value.CharacterId == character.Id && value.ItemId == item.Id, token);
+                    if (inventory is null) db.InventoryItems.Add(new PlayerInventoryItem
+                        { Id = Guid.NewGuid(), CharacterId = character.Id, ItemId = item.Id, Quantity = amount });
+                    else inventory.Quantity = checked(inventory.Quantity + amount);
+                }
+                loot.Add(new HuntLootResponse(item.Id, row.Name, row.Type, amount));
+            }
+            fight.LootJson = JsonSerializer.Serialize(loot, CombatJson.Options);
+            var messages = ReadLog(fight);
+            messages.Add(loot.Count == 0 ? "Добыча: ничего не выпало." :
+                $"Добыча: {string.Join(", ", loot.Select(value => $"{value.Name} ×{value.Quantity}"))}.");
+            fight.LogJson = JsonSerializer.Serialize(messages.TakeLast(30), CombatJson.Options);
         }
         else
         {
@@ -288,7 +334,8 @@ public sealed class HuntingService(
         {
             var amount = group.Sum(value => value.AmmoInClip + value.ReserveAmmo);
             if (amount == 0) continue;
-            var inventory = await db.InventoryItems.SingleOrDefaultAsync(value => value.CharacterId == character.Id && value.ItemId == group.Key, token);
+            var inventory = db.InventoryItems.Local.FirstOrDefault(value => value.CharacterId == character.Id && value.ItemId == group.Key) ??
+                await db.InventoryItems.SingleOrDefaultAsync(value => value.CharacterId == character.Id && value.ItemId == group.Key, token);
             if (inventory is null) db.InventoryItems.Add(new PlayerInventoryItem { Id = Guid.NewGuid(), CharacterId = character.Id, ItemId = group.Key, Quantity = amount });
             else inventory.Quantity = checked(inventory.Quantity + amount);
         }
@@ -348,7 +395,7 @@ public sealed class HuntingService(
         var needed = Math.Max(target.MinimumHuntingLevel, locationLevel);
         return new(target.Id, target.Name, target.Description, needed, target.EnergyCost, target.Health,
             target.RewardCredits, target.RewardExperience, target.RewardHuntingExperience, level >= needed,
-            level >= needed ? null : $"Откроется на уровне охоты {needed}");
+            level >= needed ? null : $"Откроется на уровне охоты {needed}", target.MinimumCredits, target.MaximumCredits);
     }
 
     private HuntFightResponse BuildResponse(GameCharacter character, HuntFight fight, HuntSnapshot snapshot, HuntState state,
@@ -356,8 +403,10 @@ public sealed class HuntingService(
     {
         var log = ReadLog(fight);
         var actionLog = fight.Status == "won" ? snapshot : null;
-        var credits = actionLog is null ? 0 : (long)Math.Floor(snapshot.RewardCredits *
-            (1 + Math.Min(Math.Max(0, snapshot.StartingHuntingLevel - snapshot.MinimumHuntingLevel) * settings.CreditBonusPerExtraLevel, settings.MaximumCreditBonus)));
+        var credits = actionLog is null ? 0 : snapshot.MinimumCredits is null
+            ? (long)Math.Floor(snapshot.RewardCredits *
+                (1 + Math.Min(Math.Max(0, snapshot.StartingHuntingLevel - snapshot.MinimumHuntingLevel) * settings.CreditBonusPerExtraLevel, settings.MaximumCreditBonus)))
+            : fight.CreditsAwarded;
         var participantList = new List<HuntParticipantResponse>
         {
             new("player", snapshot.PlayerName, "player", fight.PlayerHealth, snapshot.PlayerMaximumHealth),
@@ -381,7 +430,8 @@ public sealed class HuntingService(
             credits, actionLog?.RewardExperience ?? 0, actionLog?.RewardHuntingExperience ?? 0,
             character.HuntingLevel, character.Energy, fight.Status == "won" && character.HuntingLevel > progression.GetHunting(character.HuntingExperience - snapshot.RewardHuntingExperience).Level,
             Participants: participantList, PlayerEquipment: playerEquipment, RobotEquipment: robotEquipment,
-            RobotProtection: robotProtection);
+            RobotProtection: robotProtection,
+            Loot: JsonSerializer.Deserialize<List<HuntLootResponse>>(fight.LootJson, CombatJson.Options) ?? []);
     }
 
     private HuntFightResponse EmptyResponse(GameCharacter character, Guid requestId, string message) =>

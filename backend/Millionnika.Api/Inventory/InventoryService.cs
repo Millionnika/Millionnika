@@ -18,7 +18,7 @@ public sealed class InventoryService(
 
     public async Task<IReadOnlyList<ShopItemResponse>> GetShopAsync(CancellationToken cancellationToken) =>
         await dbContext.Items.AsNoTracking()
-            .Where(item => item.IsActive)
+            .Where(item => item.IsActive && item.Type != ItemTypes.Material)
             .OrderBy(item => item.Price)
             .Select(item => new ShopItemResponse(
                 item.Id, item.Name, item.Description, item.Price, item.Type,
@@ -84,7 +84,7 @@ public sealed class InventoryService(
             return RequestConflict(requestId, character);
 
         var item = await dbContext.Items.SingleOrDefaultAsync(
-            candidate => candidate.Id == itemId && candidate.IsActive,
+            candidate => candidate.Id == itemId && candidate.IsActive && candidate.Type != ItemTypes.Material,
             cancellationToken);
         ActionLog log;
 

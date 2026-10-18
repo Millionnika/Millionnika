@@ -8,9 +8,9 @@ import { BattleScreen, type BattleEquipment, type BattleParticipant, type Battle
 import { apiFetch, API_URL, getErrorMessage, publishPlayerState } from "@/lib/api";
 import { getPendingAction } from "@/lib/pendingAction";
 
-type Target = { id: string; name: string; description: string; minimumHuntingLevel: number; energyCost: number; health: number; rewardCredits: number; rewardExperience: number; rewardHuntingExperience: number; unlocked: boolean; lockedReason: string | null };
+type Target = { id: string; name: string; description: string; minimumHuntingLevel: number; energyCost: number; health: number; rewardCredits: number; minimumCredits: number; maximumCredits: number; rewardExperience: number; rewardHuntingExperience: number; unlocked: boolean; lockedReason: string | null };
 type Location = { id: string; name: string; description: string; minimumHuntingLevel: number; unlocked: boolean; targets: Target[] };
-type Fight = { fightId: string; replayed: boolean; status: string; turn: number; maximumTurns: number; playerHealth: number; maximumPlayerHealth: number; robotHealth: number; maximumRobotHealth: number; expiresAtUtc: string; nextActionAtUtc: string | null; message: string; log: string[]; weapons: BattleWeapon[]; participants?: BattleParticipant[]; playerEquipment?: BattleEquipment[]; robotEquipment?: BattleEquipment[]; robotProtection?: BattleProtection[]; creditsAwarded: number; experienceAwarded: number; huntingExperienceAwarded: number; huntingLevel: number; energy: number; levelIncreased: boolean; errorCode: string | null; requiredAmmoWeapon: string | null; requiredAmmoName: string | null };
+type Fight = { fightId: string; replayed: boolean; status: string; turn: number; maximumTurns: number; playerHealth: number; maximumPlayerHealth: number; robotHealth: number; maximumRobotHealth: number; expiresAtUtc: string; nextActionAtUtc: string | null; message: string; log: string[]; weapons: BattleWeapon[]; participants?: BattleParticipant[]; playerEquipment?: BattleEquipment[]; robotEquipment?: BattleEquipment[]; robotProtection?: BattleProtection[]; creditsAwarded: number; experienceAwarded: number; huntingExperienceAwarded: number; loot?: { itemId: string; name: string; type: string; quantity: number }[]; huntingLevel: number; energy: number; levelIncreased: boolean; errorCode: string | null; requiredAmmoWeapon: string | null; requiredAmmoName: string | null };
 
 export default function HuntingPage() {
   const router = useRouter();
@@ -93,7 +93,7 @@ export default function HuntingPage() {
         <h2>{location.name}</h2><p>{location.description}</p>
         {!location.unlocked && <p className="contract-lock">Откроется на уровне охоты {location.minimumHuntingLevel}</p>}
         <div className="contract-grid">{location.targets.map((target) => <article className={`contract-card${target.unlocked ? "" : " locked"}`} key={target.id}>
-          <div><h2>{target.name}</h2><p>{target.description}</p><p>Здоровье {target.health} · Энергия {target.energyCost}</p><p>Награда: {target.rewardCredits} кредитов · {target.rewardExperience} общего опыта · {target.rewardHuntingExperience} опыта охоты</p>{target.lockedReason && <p className="contract-lock">{target.lockedReason}</p>}</div>
+          <div><h2>{target.name}</h2><p>{target.description}</p><p>Здоровье {target.health} · Энергия {target.energyCost}</p><p>Награда: {target.rewardCredits} кредитов · {target.rewardExperience} общего опыта · {target.rewardHuntingExperience} опыта охоты</p>{target.maximumCredits > 0 && <p>Дополнительная добыча: {target.minimumCredits}–{target.maximumCredits} кредитов</p>}{target.lockedReason && <p className="contract-lock">{target.lockedReason}</p>}</div>
           <button className="primary-button" disabled={!target.unlocked || busy} onClick={() => start(target.id)}>Начать охоту</button>
         </article>)}</div>
       </section>)}
@@ -111,6 +111,8 @@ function BattleResult({ fight, onReturn }: Readonly<{ fight: Fight; onReturn: ()
       <div><dt>Общий опыт</dt><dd>{fight.experienceAwarded}</dd></div>
       <div><dt>Опыт охоты</dt><dd>{fight.huntingExperienceAwarded}</dd></div>
     </dl>
+    {fight.status === "won" && <div><h3>Добыча</h3>{fight.loot?.length ? <ul>{fight.loot.map((item) => <li key={item.itemId}>{item.name} ×{item.quantity}</li>)}</ul> : <p>Предметы не выпали.</p>}</div>}
+    <details><summary>Журнал боя</summary><ol>{fight.log.map((line, index) => <li key={`${index}-${line}`}>{line}</li>)}</ol></details>
     <button className="primary-button" onClick={onReturn}>Вернуться к охоте</button>
   </section>;
 }

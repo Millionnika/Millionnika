@@ -13,6 +13,8 @@ public sealed class HuntFight
     public string SnapshotJson { get; set; } = "{}";
     public string StateJson { get; set; } = "{}";
     public string LogJson { get; set; } = "[]";
+    public string LootJson { get; set; } = "[]";
+    public long CreditsAwarded { get; set; }
     public DateTimeOffset StartedAtUtc { get; set; }
     public DateTimeOffset ExpiresAtUtc { get; set; }
     public DateTimeOffset? LastActionAtUtc { get; set; }

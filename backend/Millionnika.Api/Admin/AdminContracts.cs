@@ -68,9 +68,15 @@ public sealed record AdminHuntingTargetResponse(Guid Id, Guid LocationId, string
     int MinimumHuntingLevel, int EnergyCost, int Health, int Strength, int Reflexes, int Toughness, int Agility,
     string WeaponName, decimal WeaponDamage, decimal WeaponAccuracy, int ClipSize, int RateOfFireMin,
     int RateOfFireMax, int SpareClips, decimal Armor, string ArmorCoverage, long RewardCredits,
-    long RewardExperience, long RewardHuntingExperience, bool IsActive);
+    long RewardExperience, long RewardHuntingExperience, bool IsActive,
+    long MinimumCredits, long MaximumCredits, IReadOnlyList<AdminHuntingLootRowResponse> LootRows);
+public sealed record AdminHuntingLootRowResponse(Guid ItemId, string ItemName, decimal ChancePercent,
+    int MinimumQuantity, int MaximumQuantity);
+public sealed record UpdateHuntingLootRowRequest(Guid ItemId, decimal ChancePercent,
+    int MinimumQuantity, int MaximumQuantity);
 public sealed record UpdateHuntingTargetRequest(Guid LocationId, string? Name, string? Description,
     int MinimumHuntingLevel, int EnergyCost, int Health, int Strength, int Reflexes, int Toughness, int Agility,
     string? WeaponName, decimal WeaponDamage, decimal WeaponAccuracy, int ClipSize, int RateOfFireMin,
     int RateOfFireMax, int SpareClips, decimal Armor, string? ArmorCoverage, long RewardCredits,
-    long RewardExperience, long RewardHuntingExperience, bool IsActive, string? Reason);
+    long RewardExperience, long RewardHuntingExperience, bool IsActive, string? Reason,
+    long MinimumCredits, long MaximumCredits, IReadOnlyList<UpdateHuntingLootRowRequest>? LootRows);

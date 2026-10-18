@@ -70,6 +70,7 @@ builder.Services.AddSingleton<IProgressionService, ProgressionService>();
 builder.Services.AddSingleton<IRandomSource, RandomSource>();
 builder.Services.AddSingleton<ICombatCalculator, CombatCalculator>();
 builder.Services.AddScoped<IHuntingService, HuntingService>();
+builder.Services.AddSingleton<ILootRoller, LootRoller>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IResourceRecoveryService, ResourceRecoveryService>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
