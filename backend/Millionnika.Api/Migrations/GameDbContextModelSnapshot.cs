@@ -519,6 +519,21 @@ namespace Millionnika.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Millionnika.Api.Entities.HuntingLocationTarget", b =>
+                {
+                    b.Property<Guid>("LocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("LocationId", "TargetId");
+
+                    b.HasIndex("TargetId");
+
+                    b.ToTable("hunting_location_targets", (string)null);
+                });
+
             modelBuilder.Entity("Millionnika.Api.Entities.HuntingLootRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -608,6 +623,11 @@ namespace Millionnika.Api.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
                     b.Property<int>("ClipSize")
                         .HasColumnType("integer");
 
@@ -628,9 +648,6 @@ namespace Millionnika.Api.Migrations
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
-
-                    b.Property<Guid>("LocationId")
-                        .HasColumnType("uuid");
 
                     b.Property<long>("MaximumCredits")
                         .HasColumnType("bigint");
@@ -692,10 +709,10 @@ namespace Millionnika.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LocationId");
-
                     b.ToTable("hunting_targets", null, t =>
                         {
+                            t.HasCheckConstraint("CK_hunting_targets_Category", "\"Category\" IN ('robot','mutant','animal')");
+
                             t.HasCheckConstraint("CK_hunting_targets_CreditRange", "\"MinimumCredits\" BETWEEN 0 AND 1000000000000 AND \"MaximumCredits\" BETWEEN \"MinimumCredits\" AND 1000000000000");
 
                             t.HasCheckConstraint("CK_hunting_targets_Level", "\"MinimumHuntingLevel\" BETWEEN 1 AND 20");
@@ -1181,6 +1198,25 @@ namespace Millionnika.Api.Migrations
                     b.Navigation("Character");
                 });
 
+            modelBuilder.Entity("Millionnika.Api.Entities.HuntingLocationTarget", b =>
+                {
+                    b.HasOne("Millionnika.Api.Entities.HuntingLocation", "Location")
+                        .WithMany("Targets")
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Millionnika.Api.Entities.HuntingTarget", "Target")
+                        .WithMany("Locations")
+                        .HasForeignKey("TargetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Location");
+
+                    b.Navigation("Target");
+                });
+
             modelBuilder.Entity("Millionnika.Api.Entities.HuntingLootRow", b =>
                 {
                     b.HasOne("Millionnika.Api.Entities.Item", "Item")
@@ -1207,17 +1243,6 @@ namespace Millionnika.Api.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("Millionnika.Api.Entities.HuntingTarget", b =>
-                {
-                    b.HasOne("Millionnika.Api.Entities.HuntingLocation", "Location")
-                        .WithMany("Targets")
-                        .HasForeignKey("LocationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Location");
                 });
 
             modelBuilder.Entity("Millionnika.Api.Entities.PlayerInventoryItem", b =>
@@ -1264,6 +1289,8 @@ namespace Millionnika.Api.Migrations
 
             modelBuilder.Entity("Millionnika.Api.Entities.HuntingTarget", b =>
                 {
+                    b.Navigation("Locations");
+
                     b.Navigation("LootRows");
                 });
 

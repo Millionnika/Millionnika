@@ -28,6 +28,49 @@ public sealed class HuntingServiceIntegrationTests
     private static readonly Guid SparkId = Guid.Parse("22222222-2222-2222-2222-222222222002");
 
     [Fact]
+    public async Task RemovingLocationAssignmentDoesNotBreakAnActiveFightOrSpendEnergyAgain()
+    {
+        Clock.Set(DateTimeOffset.Parse("2026-10-11T03:00:00Z"));
+        var user = CreateUser(); user.Role = "Admin";
+        var targetId = await CreateLootTargetAsync(user, []);
+        try
+        {
+            Guid locationId;
+            await using (var db = TestDatabase.CreateDbContext())
+            {
+                locationId = await db.HuntingLocationTargets.Where(value => value.TargetId == targetId)
+                    .Select(value => value.LocationId).SingleAsync();
+                var started = await Service(db, new InstantVictoryCombat()).StartAsync(user.Id,
+                    new(Guid.NewGuid(), targetId, locationId), default);
+                Assert.Equal(200, started.StatusCode);
+                Assert.Equal("active", started.Response.Status);
+            }
+            await using (var db = TestDatabase.CreateDbContext())
+                Assert.True((await new HuntingAssignmentAdminService(db).RemoveAsync(user.Id, locationId,
+                    targetId, new("Снимаем цель во время боя"), default)).Succeeded);
+            await using (var db = TestDatabase.CreateDbContext())
+            {
+                var restored = await Service(db, new InstantVictoryCombat()).GetCurrentFightAsync(user.Id, default);
+                Assert.Equal("active", restored!.Status);
+                var completed = await Service(db, new InstantVictoryCombat()).TurnAsync(user.Id,
+                    new(Guid.NewGuid(), "attack", EquipmentSlots.Melee), default);
+                Assert.Equal("won", completed.Response.Status);
+                var energy = completed.Response.Energy;
+                var rejected = await Service(db, new InstantVictoryCombat()).StartAsync(user.Id,
+                    new(Guid.NewGuid(), targetId, locationId), default);
+                Assert.Equal(409, rejected.StatusCode);
+                Assert.Equal(energy, rejected.Response.Energy);
+            }
+        }
+        finally
+        {
+            await using var cleanup = TestDatabase.CreateDbContext();
+            await cleanup.AdminAuditLogs.Where(value => value.AdminUserId == user.Id).ExecuteDeleteAsync();
+            await DeleteLootFixtureAsync(user.Id, targetId);
+        }
+    }
+
+    [Fact]
     public async Task AdminLootConfiguration_ValidatesPrecisionAndAuditsChanges()
     {
         var admin = CreateUser(); admin.Role = "Admin";
@@ -41,7 +84,7 @@ public sealed class HuntingServiceIntegrationTests
                     NerveAmount = 1, NerveIntervalMinutes = 5 }), Clock));
             var before = Assert.Single(await service.GetHuntingTargetsAsync(default), value => value.Id == targetId);
             Assert.Equal(60m, Assert.Single(before.LootRows).ChancePercent);
-            var request = new UpdateHuntingTargetRequest(target.LocationId, target.Name, target.Description,
+            var request = new UpdateHuntingTargetRequest(target.Name, target.Description,
                 target.MinimumHuntingLevel, target.EnergyCost, target.Health, target.Strength, target.Reflexes,
                 target.Toughness, target.Agility, target.WeaponName, target.WeaponDamage, target.WeaponAccuracy,
                 target.ClipSize, target.RateOfFireMin, target.RateOfFireMax, target.SpareClips,
@@ -465,21 +508,22 @@ public sealed class HuntingServiceIntegrationTests
         long minimumCredits = 2, long maximumCredits = 4)
     {
         await using var db = TestDatabase.CreateDbContext();
-        var locationId = await db.HuntingTargets.Where(value => value.Id == TargetId)
-            .Select(value => value.LocationId).SingleAsync();
+        var locationId = await db.HuntingLocationTargets.Where(value => value.TargetId == TargetId)
+            .Select(value => value.LocationId).FirstAsync();
         var id = Guid.NewGuid();
         db.Users.Add(user);
         db.EquipmentInstances.Add(new EquipmentInstance { Id = Guid.NewGuid(), CharacterId = user.Character!.Id,
             ItemId = MeleeId, Damage = 16, Accuracy = 100, EquippedSlot = EquipmentSlots.Melee, CreatedAtUtc = Clock.GetUtcNow() });
         db.HuntingTargets.Add(new HuntingTarget
         {
-            Id = id, LocationId = locationId, Name = "Тестовый робот добычи", Description = "Только тестовая база",
+            Id = id, Name = "Тестовый робот добычи", Description = "Только тестовая база",
             MinimumHuntingLevel = 1, EnergyCost = 1, Health = 1,
             Strength = 1, Reflexes = 1, Toughness = 1, Agility = 1,
             WeaponName = "Тестовая лапа", WeaponDamage = 1, WeaponAccuracy = 0,
             Armor = 0, ArmorCoverage = "{}", RewardCredits = 5,
             MinimumCredits = minimumCredits, MaximumCredits = maximumCredits,
             RewardExperience = 3, RewardHuntingExperience = 2, IsActive = true,
+            Locations = [new HuntingLocationTarget { LocationId = locationId }],
             LootRows = rows.Select((row, index) => new HuntingLootRow
             {
                 Id = Guid.Parse($"00000000-0000-0000-0000-{index + 1:000000000000}"),
@@ -495,6 +539,7 @@ public sealed class HuntingServiceIntegrationTests
     {
         await using var db = TestDatabase.CreateDbContext();
         await db.Users.Where(value => value.Id == userId).ExecuteDeleteAsync();
+        await db.HuntingLocationTargets.Where(value => value.TargetId == targetId).ExecuteDeleteAsync();
         await db.HuntingTargets.Where(value => value.Id == targetId).ExecuteDeleteAsync();
     }
 

@@ -48,7 +48,7 @@ public sealed class NpcAdminService(GameDbContext dbContext)
             var robot = await dbContext.HuntingTargets.FromSqlInterpolated($"SELECT * FROM hunting_targets WHERE \"Id\"={id} FOR UPDATE")
                 .SingleOrDefaultAsync(token);
             if (robot is null) return AdminMutationResult.Failure("НПЦ не найден.");
-            if (request.Category != "robot") return AdminMutationResult.Failure("Робота, связанного с охотой, нельзя перевести в другую категорию.");
+            if (request.Category != robot.Category) return AdminMutationResult.Failure("Категорию НПЦ, связанного с охотой, менять нельзя.");
             var old = ToResponse(robot);
             Apply(robot, request);
             AddAudit(adminId, "npc_hunting_robot_update", id, old, ToResponse(robot), request.Reason!);
@@ -121,7 +121,7 @@ public sealed class NpcAdminService(GameDbContext dbContext)
         value.Health, value.Strength, value.Toughness, value.Reflexes, value.Agility,
         value.WeaponName, value.WeaponDamage, value.WeaponAccuracy, value.Armor, value.ArmorCoverage);
 
-    private static AdminNpcResponse ToResponse(HuntingTarget value) => new(value.Id, "hunting", "robot",
+    private static AdminNpcResponse ToResponse(HuntingTarget value) => new(value.Id, "hunting", value.Category,
         value.Name, value.Description, value.IsActive, value.PortraitPath, value.FigurePath,
         value.Health, value.Strength, value.Toughness, value.Reflexes, value.Agility,
         value.WeaponName, value.WeaponDamage, value.WeaponAccuracy, value.Armor, value.ArmorCoverage);

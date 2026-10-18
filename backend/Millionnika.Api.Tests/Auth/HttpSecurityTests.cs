@@ -108,11 +108,19 @@ public sealed class HttpSecurityTests : IAsyncLifetime
         await StartAsync();
         var anonymous = Browser();
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/admin/npcs")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/admin/hunting/assignments")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync(anonymous, "/api/admin/npcs",
             new { category = "peaceful", name = "Denied" })).StatusCode);
         var player = Browser();
         await RegisterAsync(player);
         Assert.Equal(HttpStatusCode.Forbidden, (await player.GetAsync("/api/admin/npcs")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await player.GetAsync("/api/admin/hunting/assignments")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await SendAsync(player,
+            "/api/admin/hunting/locations/44444444-4444-4444-4444-444444444001/npcs",
+            new { npcId = "55555555-5555-5555-5555-555555555001", reason = "Запрещено" }, method: "PUT")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await SendAsync(player,
+            "/api/admin/hunting/locations/44444444-4444-4444-4444-444444444001/npcs/55555555-5555-5555-5555-555555555001",
+            new { reason = "Запрещено" }, method: "DELETE")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await SendAsync(player, "/api/admin/npcs",
             new { category = "peaceful", name = "Denied" })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await SendAsync(player,

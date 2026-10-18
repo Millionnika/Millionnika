@@ -7,5 +7,5 @@ public sealed class HuntingLocation
     public string Description { get; set; } = string.Empty;
     public int MinimumHuntingLevel { get; set; } = 1;
     public bool IsActive { get; set; }
-    public ICollection<HuntingTarget> Targets { get; set; } = [];
+    public ICollection<HuntingLocationTarget> Targets { get; set; } = [];
 }

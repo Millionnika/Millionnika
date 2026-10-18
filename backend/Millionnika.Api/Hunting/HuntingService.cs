@@ -25,11 +25,12 @@ public sealed class HuntingService(
     {
         var character = await db.Characters.AsNoTracking().SingleAsync(value => value.UserId == userId, token);
         var locations = await db.HuntingLocations.AsNoTracking().Where(value => value.IsActive)
-            .Include(value => value.Targets.Where(target => target.IsActive))
+            .Include(value => value.Targets.Where(assignment => assignment.Target.IsActive))
+                .ThenInclude(assignment => assignment.Target)
             .OrderBy(value => value.MinimumHuntingLevel).ThenBy(value => value.Id).ToListAsync(token);
         return locations.Select(location => new HuntingLocationResponse(location.Id, location.Name, location.Description,
             location.MinimumHuntingLevel, character.HuntingLevel >= location.MinimumHuntingLevel,
-            location.Targets.OrderBy(target => target.MinimumHuntingLevel).ThenBy(target => target.Id)
+            location.Targets.Select(value => value.Target).OrderBy(target => target.MinimumHuntingLevel).ThenBy(target => target.Id)
                 .Select(target => TargetResponse(target, character.HuntingLevel, location.MinimumHuntingLevel)).ToList())).ToList();
     }
 
@@ -54,20 +55,25 @@ public sealed class HuntingService(
     {
         await using var transaction = await db.Database.BeginTransactionAsync(token);
         var character = await LockCharacterAsync(userId, token);
-        var signature = $"start:{request.TargetId:N}";
+        var signature = request.LocationId == Guid.Empty
+            ? $"start:{request.TargetId:N}" : $"start:{request.TargetId:N}:{request.LocationId:N}";
         var replay = await ReplayAsync(character, request.RequestId, "start", signature, token);
         if (replay is not null) return await CommitResultAsync(transaction, replay, token);
 
         var active = await db.HuntFights.AnyAsync(value => value.CharacterId == character.Id && value.Status == "active", token);
-        var target = await db.HuntingTargets.Include(value => value.Location)
-            .Include(value => value.LootRows).ThenInclude(value => value.Item)
-            .SingleOrDefaultAsync(value => value.Id == request.TargetId && value.IsActive && value.Location.IsActive, token);
+        var assignment = await db.HuntingLocationTargets.Include(value => value.Location)
+            .Include(value => value.Target).ThenInclude(value => value.LootRows).ThenInclude(value => value.Item)
+            .Where(value => value.TargetId == request.TargetId && value.Target.IsActive && value.Location.IsActive &&
+                (request.LocationId == Guid.Empty || value.LocationId == request.LocationId))
+            .OrderBy(value => value.Location.MinimumHuntingLevel).ThenBy(value => value.LocationId)
+            .FirstOrDefaultAsync(token);
+        var target = assignment?.Target;
         recovery.Apply(character);
         if (active) return await RejectAsync(transaction, character, request.RequestId, "start", signature,
             "Сначала завершите текущий бой.", 409, token);
         if (target is null) return await RejectAsync(transaction, character, request.RequestId, "start", signature,
             "Эта цель сейчас недоступна.", 409, token);
-        var requiredLevel = Math.Max(target.MinimumHuntingLevel, target.Location.MinimumHuntingLevel);
+        var requiredLevel = Math.Max(target.MinimumHuntingLevel, assignment!.Location.MinimumHuntingLevel);
         if (character.HuntingLevel < requiredLevel) return await RejectAsync(transaction, character, request.RequestId,
             "start", signature, $"Нужен уровень охоты {requiredLevel}.", 409, token);
         if (character.Energy < target.EnergyCost) return await RejectAsync(transaction, character, request.RequestId,

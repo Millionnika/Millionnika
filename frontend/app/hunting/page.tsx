@@ -46,9 +46,9 @@ export default function HuntingPage() {
 
   useEffect(() => { void load().catch(() => setError("Не удалось загрузить охоту.")).finally(() => setLoading(false)); }, [load]);
 
-  async function start(targetId: string) {
-    const pending = getPendingAction("hunt_start", { targetId });
-    await mutate("/api/game/hunting/start", { requestId: pending.requestId, targetId }, pending.receivedResponse);
+  async function start(locationId: string, targetId: string) {
+    const pending = getPendingAction("hunt_start", { locationId, targetId });
+    await mutate("/api/game/hunting/start", { requestId: pending.requestId, locationId, targetId }, pending.receivedResponse);
   }
   async function turn(action: "attack" | "reload", slot: string) {
     const pending = getPendingAction("hunt_turn", { action, slot });
@@ -94,7 +94,7 @@ export default function HuntingPage() {
         {!location.unlocked && <p className="contract-lock">Откроется на уровне охоты {location.minimumHuntingLevel}</p>}
         <div className="contract-grid">{location.targets.map((target) => <article className={`contract-card${target.unlocked ? "" : " locked"}`} key={target.id}>
           <div><h2>{target.name}</h2><p>{target.description}</p><p>Здоровье {target.health} · Энергия {target.energyCost}</p><p>Награда: {target.rewardCredits} кредитов · {target.rewardExperience} общего опыта · {target.rewardHuntingExperience} опыта охоты</p>{target.maximumCredits > 0 && <p>Дополнительная добыча: {target.minimumCredits}–{target.maximumCredits} кредитов</p>}{target.lockedReason && <p className="contract-lock">{target.lockedReason}</p>}</div>
-          <button className="primary-button" disabled={!target.unlocked || busy} onClick={() => start(target.id)}>Начать охоту</button>
+          <button className="primary-button" disabled={!target.unlocked || busy} onClick={() => start(location.id, target.id)}>Начать охоту</button>
         </article>)}</div>
       </section>)}
     </div>}

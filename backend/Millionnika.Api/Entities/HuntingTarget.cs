@@ -3,8 +3,8 @@ namespace Millionnika.Api.Entities;
 public sealed class HuntingTarget
 {
     public Guid Id { get; set; }
-    public Guid LocationId { get; set; }
-    public HuntingLocation Location { get; set; } = null!;
+    public string Category { get; set; } = "robot";
+    public ICollection<HuntingLocationTarget> Locations { get; set; } = [];
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string? PortraitPath { get; set; }

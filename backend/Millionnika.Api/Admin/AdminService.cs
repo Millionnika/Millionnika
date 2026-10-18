@@ -247,7 +247,7 @@ public sealed class AdminService(
 
     public async Task<IReadOnlyList<AdminHuntingTargetResponse>> GetHuntingTargetsAsync(CancellationToken token) =>
         await dbContext.HuntingTargets.AsNoTracking().OrderBy(value => value.MinimumHuntingLevel).ThenBy(value => value.Name)
-            .Select(value => new AdminHuntingTargetResponse(value.Id, value.LocationId, value.Name, value.Description,
+            .Select(value => new AdminHuntingTargetResponse(value.Id, value.Name, value.Description,
                 value.MinimumHuntingLevel, value.EnergyCost, value.Health, value.Strength, value.Reflexes, value.Toughness, value.Agility,
                 value.WeaponName, value.WeaponDamage, value.WeaponAccuracy, value.ClipSize, value.RateOfFireMin,
                 value.RateOfFireMax, value.SpareClips, value.Armor, value.ArmorCoverage, value.RewardCredits,
@@ -261,8 +261,6 @@ public sealed class AdminService(
         if (!IsHuntingTargetValid(request) || !AdminRules.IsReasonValid(request.Reason))
             return AdminMutationResult.Failure("Проверьте характеристики робота, награды, покрытие и причину.");
         await using var transaction = await dbContext.Database.BeginTransactionAsync(token);
-        if (!await dbContext.HuntingLocations.AnyAsync(value => value.Id == request.LocationId, token))
-            return AdminMutationResult.Failure("Локация не найдена.");
         var value = await dbContext.HuntingTargets.FromSqlInterpolated($"SELECT * FROM hunting_targets WHERE \"Id\"={id} FOR UPDATE").SingleOrDefaultAsync(token);
         if (value is null) return AdminMutationResult.Failure("Робот не найден.");
         var rows = await dbContext.HuntingLootRows.Where(row => row.TargetId == id).OrderBy(row => row.Id).ToListAsync(token);
@@ -272,7 +270,7 @@ public sealed class AdminService(
              await dbContext.Items.CountAsync(item => requestedItemIds!.Contains(item.Id), token) != request.LootRows.Count))
             return AdminMutationResult.Failure("Проверьте предметы и дубликаты строк добычи.");
         var old = HuntingTargetValues(value, rows);
-        value.LocationId = request.LocationId; value.Name = request.Name!.Trim(); value.Description = request.Description!.Trim();
+        value.Name = request.Name!.Trim(); value.Description = request.Description!.Trim();
         value.MinimumHuntingLevel = request.MinimumHuntingLevel; value.EnergyCost = request.EnergyCost; value.Health = request.Health;
         value.Strength = request.Strength; value.Reflexes = request.Reflexes; value.Toughness = request.Toughness; value.Agility = request.Agility;
         value.WeaponName = request.WeaponName!.Trim(); value.WeaponDamage = request.WeaponDamage; value.WeaponAccuracy = request.WeaponAccuracy;
@@ -340,7 +338,7 @@ public sealed class AdminService(
         AdminMutationResult.Failure("Укажите причину длиной от 3 до 500 символов.");
 
     private static bool IsHuntingTargetValid(UpdateHuntingTargetRequest value) =>
-        value.LocationId != Guid.Empty && !string.IsNullOrWhiteSpace(value.Name) && value.Name.Trim().Length <= 120 &&
+        !string.IsNullOrWhiteSpace(value.Name) && value.Name.Trim().Length <= 120 &&
         !string.IsNullOrWhiteSpace(value.Description) && value.Description.Trim().Length <= 500 &&
         !string.IsNullOrWhiteSpace(value.WeaponName) && value.WeaponName.Trim().Length <= 120 &&
         value.MinimumHuntingLevel is >= 1 and <= 20 && value.EnergyCost > 0 && value.Health > 0 &&
@@ -360,7 +358,7 @@ public sealed class AdminService(
 
     private static object HuntingTargetValues(HuntingTarget value, IReadOnlyList<HuntingLootRow> rows) => new
     {
-        value.LocationId, value.Name, value.Description, value.MinimumHuntingLevel, value.EnergyCost, value.Health,
+        value.Name, value.Description, value.MinimumHuntingLevel, value.EnergyCost, value.Health,
         value.Strength, value.Reflexes, value.Toughness, value.Agility, value.WeaponName, value.WeaponDamage,
         value.WeaponAccuracy, value.ClipSize, value.RateOfFireMin, value.RateOfFireMax, value.SpareClips,
         value.Armor, value.ArmorCoverage, value.RewardCredits, value.MinimumCredits, value.MaximumCredits,

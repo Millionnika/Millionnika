@@ -1,6 +1,6 @@
 namespace Millionnika.Api.Hunting;
 
-public sealed record StartHuntRequest(Guid RequestId, Guid TargetId);
+public sealed record StartHuntRequest(Guid RequestId, Guid TargetId, Guid LocationId = default);
 public sealed record HuntTurnRequest(Guid RequestId, string? Action, string? Slot);
 
 public sealed record HuntingTargetResponse(

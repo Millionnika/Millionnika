@@ -11,3 +11,11 @@ public sealed record SaveNpcRequest(
     string? PortraitPath, string? FigurePath, int? Health, int? Strength, int? Toughness,
     int? Reflexes, int? Agility, string? WeaponName, decimal? WeaponDamage,
     decimal? WeaponAccuracy, decimal? Armor, string? ArmorCoverage, string? Reason);
+
+public sealed record HuntingAssignmentResponse(Guid LocationId, Guid NpcId, string Name, string Category, bool IsActive);
+public sealed record HuntingSetupRequest(
+    int MinimumHuntingLevel, int EnergyCost, int ClipSize, int RateOfFireMin, int RateOfFireMax,
+    int SpareClips, long RewardCredits, long MinimumCredits, long MaximumCredits,
+    long RewardExperience, long RewardHuntingExperience);
+public sealed record AssignHuntingNpcRequest(Guid NpcId, string? Reason, HuntingSetupRequest? Setup);
+public sealed record RemoveHuntingNpcRequest(string? Reason);

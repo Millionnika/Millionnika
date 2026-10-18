@@ -15,7 +15,8 @@ type Item = { id: string; name: string; description: string; price: number; type
 type ActionLog = { id: string; username: string; actionType: string; succeeded: boolean; message: string; createdAtUtc: string };
 type AuditLog = { id: string; adminUsername: string; action: string; targetType: string; targetId: string; oldValue: string; newValue: string; reason: string; createdAtUtc: string };
 type HuntingLocation = { id: string; name: string; description: string; minimumHuntingLevel: number; isActive: boolean };
-type HuntingTarget = { id: string; locationId: string; name: string; description: string; minimumHuntingLevel: number; energyCost: number; health: number; strength: number; reflexes: number; toughness: number; agility: number; weaponName: string; weaponDamage: number; weaponAccuracy: number; clipSize: number; rateOfFireMin: number; rateOfFireMax: number; spareClips: number; armor: number; armorCoverage: string; rewardCredits: number; minimumCredits: number; maximumCredits: number; lootRows: { itemId: string; itemName: string; chancePercent: number; minimumQuantity: number; maximumQuantity: number }[]; rewardExperience: number; rewardHuntingExperience: number; isActive: boolean };
+type HuntingTarget = { id: string; name: string; description: string; minimumHuntingLevel: number; energyCost: number; health: number; strength: number; reflexes: number; toughness: number; agility: number; weaponName: string; weaponDamage: number; weaponAccuracy: number; clipSize: number; rateOfFireMin: number; rateOfFireMax: number; spareClips: number; armor: number; armorCoverage: string; rewardCredits: number; minimumCredits: number; maximumCredits: number; lootRows: { itemId: string; itemName: string; chancePercent: number; minimumQuantity: number; maximumQuantity: number }[]; rewardExperience: number; rewardHuntingExperience: number; isActive: boolean };
+type HuntingAssignment = { locationId: string; npcId: string; name: string; category: string; isActive: boolean };
 type NpcCategory = "peaceful" | "robot" | "mutant" | "animal";
 type Npc = { id: string; source: "template" | "hunting"; category: NpcCategory; name: string; description: string; isActive: boolean; portraitPath: string | null; figurePath: string | null; health: number | null; strength: number | null; toughness: number | null; reflexes: number | null; agility: number | null; weaponName: string | null; weaponDamage: number | null; weaponAccuracy: number | null; armor: number | null; armorCoverage: string | null };
 const MAX_ECONOMY_VALUE = 1_000_000_000_000;
@@ -33,6 +34,7 @@ export default function AdminPage() {
   const [audits, setAudits] = useState<AuditLog[]>([]);
   const [huntingLocations, setHuntingLocations] = useState<HuntingLocation[]>([]);
   const [huntingTargets, setHuntingTargets] = useState<HuntingTarget[]>([]);
+  const [huntingAssignments, setHuntingAssignments] = useState<HuntingAssignment[]>([]);
   const [npcs, setNpcs] = useState<Npc[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -42,6 +44,7 @@ export default function AdminPage() {
   const [npcCategory, setNpcCategory] = useState<NpcCategory>("peaceful");
   const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null);
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
+  const [assignmentNpcId, setAssignmentNpcId] = useState("");
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -57,15 +60,17 @@ export default function AdminPage() {
   }, [router]);
 
   const refresh = useCallback(async () => {
-    const [p, c, i, a, audit, locations, targets, npcResponse] = await Promise.all([
+    const [p, c, i, a, audit, locations, targets, npcResponse, assignments] = await Promise.all([
       request("/api/admin/players"), request("/api/admin/contracts"), request("/api/admin/items"),
       request("/api/admin/action-logs"), request("/api/admin/audit-logs"),
       request("/api/admin/hunting/locations"), request("/api/admin/hunting/targets"), request("/api/admin/npcs"),
+      request("/api/admin/hunting/assignments"),
     ]);
     setPlayers(await p.json()); setContracts(await c.json()); setItems(await i.json());
     setActions(await a.json()); setAudits(await audit.json());
     setHuntingLocations(await locations.json()); setHuntingTargets(await targets.json());
     setNpcs(await npcResponse.json());
+    setHuntingAssignments(await assignments.json());
   }, [request]);
 
   useEffect(() => { void refresh().catch((reason) => setError(reason.message)); }, [refresh]);
@@ -121,6 +126,16 @@ export default function AdminPage() {
     } catch (reason) { setError((reason as Error).message); }
   }
 
+  async function changeAssignment(path: string, method: "PUT" | "DELETE", body: object) {
+    setError(""); setMessage("");
+    try {
+      const response = await request(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      setMessage((await response.json() as { message: string }).message);
+      setAssignmentNpcId("");
+      await refresh();
+    } catch (reason) { setError((reason as Error).message); }
+  }
+
   function updateResources(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -132,6 +147,10 @@ export default function AdminPage() {
 
   const visibleContracts = contracts.filter((contract) => contract.direction === (activityTab === "hacking" ? "hacking" : "normal"));
   const selectedLocation = huntingLocations.find((location) => location.id === selectedLocationId);
+  const assignedHere = huntingAssignments.filter((assignment) => assignment.locationId === selectedLocationId);
+  const availableNpcs = npcs.filter((npc) => npc.category !== "peaceful" && npc.health !== null &&
+    !assignedHere.some((assignment) => assignment.npcId === npc.id));
+  const assignmentNpc = availableNpcs.find((npc) => npc.id === assignmentNpcId);
   const selectedTarget = huntingTargets.find((target) => target.id === selectedTargetId);
   const selectedContract = visibleContracts.find((contract) => contract.id === selectedContractId);
   const selectedItem = items.find((item) => item.id === selectedItemId);
@@ -180,12 +199,39 @@ export default function AdminPage() {
         {selectedLocation && <form className="admin-editor admin-form" key={selectedLocation.id} onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void mutate(`/api/admin/hunting/locations/${selectedLocation.id}`, { name: form.get("name"), description: form.get("description"), minimumHuntingLevel: Number(form.get("minimumHuntingLevel")), isActive: form.get("isActive") === "on", reason: form.get("reason") }); }}>
           <h3>{selectedLocation.name}</h3><AdminGroup title="Основное" wide><label>Название<input name="name" defaultValue={selectedLocation.name} maxLength={120} required /></label><label>Описание<textarea name="description" defaultValue={selectedLocation.description} maxLength={500} required /></label></AdminGroup><AdminGroup title="Доступность"><NumberField name="minimumHuntingLevel" label="Уровень охоты" value={selectedLocation.minimumHuntingLevel} min={1} max={20} /><CheckField name="isActive" label="Активна" checked={selectedLocation.isActive} /></AdminGroup><AdminActions><ReasonField /><button className="primary-button" type="submit">Сохранить локацию</button></AdminActions>
         </form>}
+        {selectedLocation && <div className="admin-editor" key={`assign-${selectedLocation.id}`}>
+          <h3>НПЦ в локации «{selectedLocation.name}»</h3>
+          {assignedHere.length === 0 && <p>Пока никто не назначен.</p>}
+          <div className="admin-list">{assignedHere.map((assignment) =>
+            <form className="admin-inline-form" key={assignment.npcId} onSubmit={(event) => {
+              event.preventDefault(); const form = new FormData(event.currentTarget);
+              void changeAssignment(`/api/admin/hunting/locations/${selectedLocation.id}/npcs/${assignment.npcId}`,
+                "DELETE", { reason: form.get("reason") });
+            }}><span>{assignment.name} · {assignment.category}{assignment.isActive ? "" : " · отключён"}</span>
+              <ReasonField /><button className="secondary-button" type="submit">Убрать</button>
+            </form>)}</div>
+          {availableNpcs.length > 0 && <form className="admin-form" onSubmit={(event) => {
+            event.preventDefault(); const form = new FormData(event.currentTarget);
+            const npc = availableNpcs.find((value) => value.id === String(form.get("npcId")));
+            if (!npc) return;
+            const setup = npc.source === "template" ? huntingSetupPayload(form) : null;
+            void changeAssignment(`/api/admin/hunting/locations/${selectedLocation.id}/npcs`, "PUT",
+              { npcId: npc.id, setup, reason: form.get("reason") });
+          }}>
+            <label>Боевой НПЦ<select name="npcId" value={assignmentNpcId} onChange={(event) => setAssignmentNpcId(event.target.value)} required>
+              <option value="">Выберите НПЦ</option>
+              {availableNpcs.map((npc) => <option key={npc.id} value={npc.id}>{npc.name} · {npc.category}{npc.source === "template" ? " · без настроек охоты" : ""}</option>)}
+            </select></label>
+            {assignmentNpc?.source === "template" && <HuntingSetupFields />}
+            {assignmentNpc && <AdminActions><ReasonField /><button className="primary-button" type="submit">Добавить</button></AdminActions>}
+          </form>}
+        </div>}
       </AdminSection>}
 
       {tab === "activities" && activityTab === "hunting" && huntingTab === "targets" && <AdminSection title="Роботы">
         <AdminRecordList rows={huntingTargets.map((target) => ({ id: target.id, title: target.name, detail: `Уровень охоты ${target.minimumHuntingLevel}` }))} selectedId={selectedTargetId} onSelect={setSelectedTargetId} />
         {selectedTarget && [selectedTarget].map((target) => <form className="admin-editor admin-form" key={target.id} onSubmit={(event) => { event.preventDefault(); try { void mutate(`/api/admin/hunting/targets/${target.id}`, huntingTargetPayload(new FormData(event.currentTarget))); } catch { setError("Проверьте формат JSON строк добычи."); } }}>
-          <h3>{target.name}</h3><input name="locationId" type="hidden" value={target.locationId} /><AdminGroup title="Основное" wide><label>Название<input name="name" defaultValue={target.name} maxLength={120} required /></label><label>Описание<textarea name="description" defaultValue={target.description} maxLength={500} required /></label></AdminGroup>
+          <h3>{target.name}</h3><AdminGroup title="Основное" wide><label>Название<input name="name" defaultValue={target.name} maxLength={120} required /></label><label>Описание<textarea name="description" defaultValue={target.description} maxLength={500} required /></label></AdminGroup>
           <AdminGroup title="Доступ и здоровье"><NumberField name="minimumHuntingLevel" label="Уровень охоты" value={target.minimumHuntingLevel} min={1} max={20} /><NumberField name="energyCost" label="Энергия" value={target.energyCost} min={1} /><NumberField name="health" label="Здоровье" value={target.health} min={1} /></AdminGroup>
           <AdminGroup title="Характеристики">
           {(["strength","toughness","reflexes","agility"] as const).map((name) => <NumberField key={name} name={name} label={{ strength: "Сила (STR)", toughness: "Стойкость (TGH)", reflexes: "Реакция (REF)", agility: "Ловкость (AGI)" }[name]} value={target[name]} min={1} />)}
@@ -238,11 +284,11 @@ function NpcEditor({ category, npc, onSubmit }: Readonly<{ category: NpcCategory
   const number = (name: "health" | "strength" | "toughness" | "reflexes" | "agility" | "weaponDamage" | "weaponAccuracy" | "armor", label: string, min: number, max: number, step?: string) => <label>{label}<input name={name} type="number" defaultValue={npc?.[name] ?? ""} min={min} max={max} step={step} required={requiredCombat} /></label>;
   return <form className="admin-editor admin-form" onSubmit={onSubmit}>
     <h3>{npc ? npc.name : "Новый НПЦ"}</h3>
-    {npc?.source === "hunting" && <p>Этот робот уже участвует в охоте. Изменения имени, боевых параметров и активности действуют на будущие бои; награды и условия охоты редактируются в «Активности → Охота».</p>}
+    {npc?.source === "hunting" && <p>Этот НПЦ настроен для охоты. Изменения имени, боевых параметров и активности действуют на будущие бои; награды и условия охоты редактируются в «Активности → Охота».</p>}
     <AdminGroup title="Основное" wide>
       <label>Название<input name="name" defaultValue={npc?.name ?? ""} maxLength={120} required /></label>
       <label>Описание<textarea name="description" defaultValue={npc?.description ?? ""} maxLength={500} required /></label>
-      {npc?.source === "hunting" ? <input type="hidden" name="category" value="robot" /> : <label>Категория<select name="category" value={currentCategory} onChange={(event) => setCurrentCategory(event.target.value as NpcCategory)}><option value="peaceful">Мирные</option><option value="robot">Роботы</option><option value="mutant">Мутанты</option><option value="animal">Животные</option></select></label>}
+      {npc?.source === "hunting" ? <input type="hidden" name="category" value={npc.category} /> : <label>Категория<select name="category" value={currentCategory} onChange={(event) => setCurrentCategory(event.target.value as NpcCategory)}><option value="peaceful">Мирные</option><option value="robot">Роботы</option><option value="mutant">Мутанты</option><option value="animal">Животные</option></select></label>}
       <CheckField name="isActive" label="Активен" checked={npc?.isActive ?? true} />
     </AdminGroup>
     <AdminGroup title="Изображения" wide>
@@ -276,6 +322,30 @@ function npcPayload(form: FormData, fallbackCategory: NpcCategory) {
     armor: nullableNumber("armor"), armorCoverage: nullableText("armorCoverage"), reason: form.get("reason") };
 }
 function NumberField({ name, label, value, min, max, step }: Readonly<{ name: string; label: string; value: number; min?: number; max?: number; step?: string }>) { return <label>{label}<input name={name} type="number" defaultValue={value} min={min} max={max} step={step} required /></label>; }
+function HuntingSetupFields() { const field = (name: string, label: string, min: number, max: number) =>
+  <label key={name}>{label}<input name={name} type="number" min={min} max={max} step="1" required /></label>;
+  return <AdminGroup title="Параметры охоты для нового НПЦ — задаются один раз">
+    <p>Боевые характеристики берутся из карточки НПЦ. Укажите стоимость, тип атаки (для ближнего боя магазин, очередь и запас — 0) и награды. Автоматического баланса нет.</p>
+    {field("minimumHuntingLevel", "Минимальный уровень охоты", 1, 20)}
+    {field("energyCost", "Стоимость энергии", 1, 1000000)}
+    {field("clipSize", "Патронов в магазине", 0, 1000)}
+    {field("rateOfFireMin", "Очередь от", 0, 1000)}
+    {field("rateOfFireMax", "Очередь до", 0, 1000)}
+    {field("spareClips", "Запасных магазинов", 0, 3)}
+    {field("rewardCredits", "Базовые кредиты", 0, MAX_ECONOMY_VALUE)}
+    {field("minimumCredits", "Дополнительные кредиты от", 0, MAX_ECONOMY_VALUE)}
+    {field("maximumCredits", "Дополнительные кредиты до", 0, MAX_ECONOMY_VALUE)}
+    {field("rewardExperience", "Общий опыт", 0, MAX_ECONOMY_VALUE)}
+    {field("rewardHuntingExperience", "Опыт охоты", 0, MAX_ECONOMY_VALUE)}
+  </AdminGroup>;
+}
+function huntingSetupPayload(form: FormData) { const value = (name: string) => Number(form.get(name)); return {
+  minimumHuntingLevel: value("minimumHuntingLevel"), energyCost: value("energyCost"),
+  clipSize: value("clipSize"), rateOfFireMin: value("rateOfFireMin"), rateOfFireMax: value("rateOfFireMax"),
+  spareClips: value("spareClips"), rewardCredits: value("rewardCredits"),
+  minimumCredits: value("minimumCredits"), maximumCredits: value("maximumCredits"),
+  rewardExperience: value("rewardExperience"), rewardHuntingExperience: value("rewardHuntingExperience") };
+}
 function ReasonField() { return <label className="reason-field">Причина<input name="reason" minLength={3} maxLength={500} required /></label>; }
 function CheckField({ name, label, checked }: Readonly<{ name: string; label: string; checked: boolean }>) { return <label className="check-field"><input name={name} type="checkbox" defaultChecked={checked} />{label}</label>; }
 function ContractProgressionFields({ contract, direction = "normal" }: Readonly<{ contract?: Contract; direction?: "normal" | "hacking" }>) { return <><label>Направление<select name="direction" defaultValue={contract?.direction ?? direction}><option value="normal">Обычный</option><option value="hacking">Взлом</option></select></label><NumberField name="minimumLevel" label="Минимальный общий уровень" value={contract?.minimumLevel ?? 1} min={1} max={20} /><NumberField name="minimumHackingLevel" label="Минимальный Взлом" value={contract?.minimumHackingLevel ?? 1} min={1} max={20} /></>; }
@@ -287,4 +357,4 @@ function ItemDefinitionFields({ item }: Readonly<{ item?: Item }>) { return <>
 </>; }
 function itemUpdatePayload(form: FormData) { return { price: Number(form.get("price")), description: form.get("description"), effectResource: form.get("effectResource"), effectAmount: Number(form.get("effectAmount")), cooldownSeconds: Number(form.get("cooldownSeconds")), cooldownGroup: form.get("cooldownGroup"), minimumDamage: Number(form.get("minimumDamage")), maximumDamage: Number(form.get("maximumDamage")), minimumAccuracy: Number(form.get("minimumAccuracy")), maximumAccuracy: Number(form.get("maximumAccuracy")), minimumArmor: Number(form.get("minimumArmor")), maximumArmor: Number(form.get("maximumArmor")), armorCoverage: form.get("armorCoverage"), caliber: form.get("caliber"), clipSize: Number(form.get("clipSize")), rateOfFireMin: Number(form.get("rateOfFireMin")), rateOfFireMax: Number(form.get("rateOfFireMax")), isActive: form.get("isActive") === "on", reason: form.get("reason") }; }
 function itemCreatePayload(form: FormData) { return { name: form.get("name"), type: form.get("type"), allowedSlots: form.get("allowedSlots"), ...itemUpdatePayload(form) }; }
-function huntingTargetPayload(form: FormData) { const number = (name: string) => Number(form.get(name)); return { locationId: form.get("locationId"), name: form.get("name"), description: form.get("description"), minimumHuntingLevel: number("minimumHuntingLevel"), energyCost: number("energyCost"), health: number("health"), strength: number("strength"), reflexes: number("reflexes"), toughness: number("toughness"), agility: number("agility"), weaponName: form.get("weaponName"), weaponDamage: number("weaponDamage"), weaponAccuracy: number("weaponAccuracy"), clipSize: number("clipSize"), rateOfFireMin: number("rateOfFireMin"), rateOfFireMax: number("rateOfFireMax"), spareClips: number("spareClips"), armor: number("armor"), armorCoverage: form.get("armorCoverage"), rewardCredits: number("rewardCredits"), minimumCredits: number("minimumCredits"), maximumCredits: number("maximumCredits"), lootRows: JSON.parse(String(form.get("lootRows"))), rewardExperience: number("rewardExperience"), rewardHuntingExperience: number("rewardHuntingExperience"), isActive: form.get("isActive") === "on", reason: form.get("reason") }; }
+function huntingTargetPayload(form: FormData) { const number = (name: string) => Number(form.get(name)); return { name: form.get("name"), description: form.get("description"), minimumHuntingLevel: number("minimumHuntingLevel"), energyCost: number("energyCost"), health: number("health"), strength: number("strength"), reflexes: number("reflexes"), toughness: number("toughness"), agility: number("agility"), weaponName: form.get("weaponName"), weaponDamage: number("weaponDamage"), weaponAccuracy: number("weaponAccuracy"), clipSize: number("clipSize"), rateOfFireMin: number("rateOfFireMin"), rateOfFireMax: number("rateOfFireMax"), spareClips: number("spareClips"), armor: number("armor"), armorCoverage: form.get("armorCoverage"), rewardCredits: number("rewardCredits"), minimumCredits: number("minimumCredits"), maximumCredits: number("maximumCredits"), lootRows: JSON.parse(String(form.get("lootRows"))), rewardExperience: number("rewardExperience"), rewardHuntingExperience: number("rewardHuntingExperience"), isActive: form.get("isActive") === "on", reason: form.get("reason") }; }

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Millionnika.Api.Admin;
 
@@ -27,6 +28,14 @@ public static class AdminEndpoints
         admin.MapGet("/hunting/targets", async (IAdminService service, CancellationToken token) => Results.Ok(await service.GetHuntingTargetsAsync(token)));
         admin.MapPut("/hunting/targets/{id:guid}", async (Guid id, UpdateHuntingTargetRequest request, ClaimsPrincipal principal, IAdminService service, CancellationToken token) =>
             ToResult(await service.UpdateHuntingTargetAsync(GetUserId(principal), id, request, token)));
+        admin.MapGet("/hunting/assignments", async (HuntingAssignmentAdminService service, CancellationToken token) =>
+            Results.Ok(await service.GetAllAsync(token)));
+        admin.MapPut("/hunting/locations/{id:guid}/npcs", async (Guid id, AssignHuntingNpcRequest request,
+            ClaimsPrincipal principal, HuntingAssignmentAdminService service, CancellationToken token) =>
+            ToResult(await service.AssignAsync(GetUserId(principal), id, request, token)));
+        admin.MapDelete("/hunting/locations/{id:guid}/npcs/{npcId:guid}", async (Guid id, Guid npcId,
+            [FromBody] RemoveHuntingNpcRequest request, ClaimsPrincipal principal, HuntingAssignmentAdminService service, CancellationToken token) =>
+            ToResult(await service.RemoveAsync(GetUserId(principal), id, npcId, request, token)));
         admin.MapGet("/npcs", async (NpcAdminService service, CancellationToken token) => Results.Ok(await service.GetAllAsync(token)));
         admin.MapPost("/npcs", async (SaveNpcRequest request, ClaimsPrincipal principal, NpcAdminService service, CancellationToken token) =>
             ToResult(await service.CreateAsync(GetUserId(principal), request, token), created: true));

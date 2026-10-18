@@ -64,7 +64,7 @@ public sealed record AdminMutationResult(bool Succeeded, string Message)
 
 public sealed record AdminHuntingLocationResponse(Guid Id, string Name, string Description, int MinimumHuntingLevel, bool IsActive);
 public sealed record UpdateHuntingLocationRequest(string? Name, string? Description, int MinimumHuntingLevel, bool IsActive, string? Reason);
-public sealed record AdminHuntingTargetResponse(Guid Id, Guid LocationId, string Name, string Description,
+public sealed record AdminHuntingTargetResponse(Guid Id, string Name, string Description,
     int MinimumHuntingLevel, int EnergyCost, int Health, int Strength, int Reflexes, int Toughness, int Agility,
     string WeaponName, decimal WeaponDamage, decimal WeaponAccuracy, int ClipSize, int RateOfFireMin,
     int RateOfFireMax, int SpareClips, decimal Armor, string ArmorCoverage, long RewardCredits,
@@ -74,7 +74,7 @@ public sealed record AdminHuntingLootRowResponse(Guid ItemId, string ItemName, d
     int MinimumQuantity, int MaximumQuantity);
 public sealed record UpdateHuntingLootRowRequest(Guid ItemId, decimal ChancePercent,
     int MinimumQuantity, int MaximumQuantity);
-public sealed record UpdateHuntingTargetRequest(Guid LocationId, string? Name, string? Description,
+public sealed record UpdateHuntingTargetRequest(string? Name, string? Description,
     int MinimumHuntingLevel, int EnergyCost, int Health, int Strength, int Reflexes, int Toughness, int Agility,
     string? WeaponName, decimal WeaponDamage, decimal WeaponAccuracy, int ClipSize, int RateOfFireMin,
     int RateOfFireMax, int SpareClips, decimal Armor, string? ArmorCoverage, long RewardCredits,
