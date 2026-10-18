@@ -367,6 +367,12 @@ input:focus, textarea:focus, select:focus { border-color: var(--teal); box-shado
 .admin-assignment-list { display: grid; gap: 8px; }
 .admin-assignment-list .admin-inline-form { flex-wrap: wrap; margin-top: 0; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .admin-assignment-list .admin-inline-form > span { flex: 1 1 180px; min-width: 0; }
+.admin-form.admin-assignment-form { grid-template-columns: minmax(0, 1fr); margin-top: 16px; }
+.admin-assignment-form > label { min-width: 0; }
+.admin-assignment-hint { margin: 0; color: var(--muted); line-height: 1.45; }
+.admin-assignment-form .admin-group-fields { grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); align-items: start; }
+.admin-assignment-form .admin-group-fields > label { display: grid; align-content: start; gap: 6px; min-width: 0; }
+.admin-assignment-form .admin-group-fields input { width: 100%; }
 .admin-editor h3 { grid-column: 1 / -1; margin: 0; }
 .admin-editor > p { color: var(--muted); }
 .admin-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px; }

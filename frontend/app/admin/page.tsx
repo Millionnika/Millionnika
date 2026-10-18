@@ -223,7 +223,7 @@ export default function AdminPage() {
               <CommentField /><button className="secondary-button" type="submit">Убрать из локации</button>
             </form>)}</div>
           {availableNpcs.length === 0 && <p>Все доступные боевые НПЦ уже добавлены</p>}
-          {availableNpcs.length > 0 && <form className="admin-form" onSubmit={(event) => {
+          {availableNpcs.length > 0 && <form className="admin-form admin-assignment-form" onSubmit={(event) => {
             event.preventDefault(); const form = new FormData(event.currentTarget);
             const npc = availableNpcs.find((value) => value.id === String(form.get("npcId")));
             if (!npc) return;
@@ -382,20 +382,26 @@ function npcPayload(form: FormData, fallbackCategory: NpcCategory) {
 function NumberField({ name, label, value, min, max, step }: Readonly<{ name: string; label: string; value: number; min?: number; max?: number; step?: string }>) { return <label>{label}<input name={name} type="number" defaultValue={value} min={min} max={max} step={step} required /></label>; }
 function HuntingSetupFields() { const field = (name: string, label: string, min: number, max: number) =>
   <label key={name}>{label}<input name={name} type="number" min={min} max={max} step="1" required /></label>;
-  return <AdminGroup title="Параметры охоты для нового НПЦ — задаются один раз">
-    <p>Боевые характеристики берутся из карточки НПЦ. Укажите стоимость, тип атаки (для ближнего боя магазин, очередь и запас — 0) и награды. Автоматического баланса нет.</p>
-    {field("minimumHuntingLevel", "Минимальный уровень охоты", 1, 20)}
-    {field("energyCost", "Стоимость энергии", 1, 1000000)}
-    {field("clipSize", "Патронов в магазине", 0, 1000)}
-    {field("rateOfFireMin", "Очередь от", 0, 1000)}
-    {field("rateOfFireMax", "Очередь до", 0, 1000)}
-    {field("spareClips", "Запасных магазинов", 0, 3)}
-    {field("rewardCredits", "Базовые кредиты", 0, MAX_ECONOMY_VALUE)}
-    {field("minimumCredits", "Дополнительные кредиты от", 0, MAX_ECONOMY_VALUE)}
-    {field("maximumCredits", "Дополнительные кредиты до", 0, MAX_ECONOMY_VALUE)}
-    {field("rewardExperience", "Общий опыт", 0, MAX_ECONOMY_VALUE)}
-    {field("rewardHuntingExperience", "Опыт охоты", 0, MAX_ECONOMY_VALUE)}
-  </AdminGroup>;
+  return <>
+    <p className="admin-assignment-hint">Боевые характеристики берутся из карточки НПЦ. Параметры охоты задаются один раз; для ближнего боя магазин, очередь и запас равны 0.</p>
+    <AdminGroup title="Доступ к охоте">
+      {field("minimumHuntingLevel", "Минимальный уровень охоты", 1, 20)}
+      {field("energyCost", "Стоимость энергии", 1, 1000000)}
+    </AdminGroup>
+    <AdminGroup title="Боеприпасы и очередь">
+      {field("clipSize", "Патронов в магазине", 0, 1000)}
+      {field("rateOfFireMin", "Очередь от", 0, 1000)}
+      {field("rateOfFireMax", "Очередь до", 0, 1000)}
+      {field("spareClips", "Запасных магазинов", 0, 3)}
+    </AdminGroup>
+    <AdminGroup title="Награды">
+      {field("rewardCredits", "Базовые кредиты", 0, MAX_ECONOMY_VALUE)}
+      {field("minimumCredits", "Дополнительные кредиты от", 0, MAX_ECONOMY_VALUE)}
+      {field("maximumCredits", "Дополнительные кредиты до", 0, MAX_ECONOMY_VALUE)}
+      {field("rewardExperience", "Общий опыт", 0, MAX_ECONOMY_VALUE)}
+      {field("rewardHuntingExperience", "Опыт охоты", 0, MAX_ECONOMY_VALUE)}
+    </AdminGroup>
+  </>;
 }
 function huntingSetupPayload(form: FormData) { const value = (name: string) => Number(form.get(name)); return {
   minimumHuntingLevel: value("minimumHuntingLevel"), energyCost: value("energyCost"),
