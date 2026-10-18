@@ -76,6 +76,7 @@ builder.Services.AddScoped<IResourceRecoveryService, ResourceRecoveryService>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddSingleton<IEquipmentRoller, EquipmentRoller>();
 builder.Services.AddScoped<IAdminService, AdminService>();
+builder.Services.AddScoped<NpcAdminService>();
 builder.Services.AddScoped<IPlayerDirectoryService, PlayerDirectoryService>();
 builder.Services.AddScoped<IFriendService, FriendService>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)

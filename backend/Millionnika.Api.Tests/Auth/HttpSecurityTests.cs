@@ -102,6 +102,24 @@ public sealed class HttpSecurityTests : IAsyncLifetime
     private static string SessionCookie(HttpResponseMessage response) =>
         response.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith("millionnika_session=")).Split(';')[0];
 
+    [Fact]
+    public async Task NpcAdminRoutes_DenyAnonymousAndOrdinaryPlayer()
+    {
+        await StartAsync();
+        var anonymous = Browser();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/admin/npcs")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendAsync(anonymous, "/api/admin/npcs",
+            new { category = "peaceful", name = "Denied" })).StatusCode);
+        var player = Browser();
+        await RegisterAsync(player);
+        Assert.Equal(HttpStatusCode.Forbidden, (await player.GetAsync("/api/admin/npcs")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await SendAsync(player, "/api/admin/npcs",
+            new { category = "peaceful", name = "Denied" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await SendAsync(player,
+            "/api/admin/npcs/55555555-5555-5555-5555-555555555001",
+            new { category = "robot", name = "Denied" }, method: "PUT")).StatusCode);
+    }
+
     [Theory]
     [InlineData("/api/auth/register", "POST")]
     [InlineData("/api/auth/login", "POST")]

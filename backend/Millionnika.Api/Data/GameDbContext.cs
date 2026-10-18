@@ -19,6 +19,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
     public DbSet<FriendRelation> FriendRelations => Set<FriendRelation>();
     public DbSet<HuntingLocation> HuntingLocations => Set<HuntingLocation>();
     public DbSet<HuntingTarget> HuntingTargets => Set<HuntingTarget>();
+    public DbSet<NpcTemplate> NpcTemplates => Set<NpcTemplate>();
     public DbSet<HuntingLootRow> HuntingLootRows => Set<HuntingLootRow>();
     public DbSet<HuntFight> HuntFights => Set<HuntFight>();
     public DbSet<HuntingRequest> HuntingRequests => Set<HuntingRequest>();
@@ -265,12 +266,33 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
             entity.HasKey(value => value.Id);
             entity.Property(value => value.Name).HasMaxLength(120).IsRequired();
             entity.Property(value => value.Description).HasMaxLength(500).IsRequired();
+            entity.Property(value => value.PortraitPath).HasMaxLength(500);
+            entity.Property(value => value.FigurePath).HasMaxLength(500);
             entity.Property(value => value.WeaponName).HasMaxLength(120).IsRequired();
             entity.Property(value => value.WeaponDamage).HasPrecision(7, 2);
             entity.Property(value => value.WeaponAccuracy).HasPrecision(5, 2);
             entity.Property(value => value.Armor).HasPrecision(5, 2);
             entity.Property(value => value.ArmorCoverage).HasColumnType("jsonb").IsRequired();
             entity.HasOne(value => value.Location).WithMany(value => value.Targets).HasForeignKey(value => value.LocationId).OnDelete(DeleteBehavior.Restrict);
+        });
+        modelBuilder.Entity<NpcTemplate>(entity =>
+        {
+            entity.ToTable("npc_templates", table =>
+            {
+                table.HasCheckConstraint("CK_npc_templates_Category", "\"Category\" IN ('peaceful','robot','mutant','animal')");
+                table.HasCheckConstraint("CK_npc_templates_Combat", "\"Category\" = 'peaceful' OR COALESCE((\"Health\" BETWEEN 1 AND 1000000 AND \"Strength\" BETWEEN 1 AND 1000000 AND \"Toughness\" BETWEEN 1 AND 1000000 AND \"Reflexes\" BETWEEN 1 AND 1000000 AND \"Agility\" BETWEEN 1 AND 1000000 AND \"WeaponName\" IS NOT NULL AND \"WeaponName\" <> '' AND \"WeaponDamage\" BETWEEN 1 AND 1000 AND \"WeaponAccuracy\" BETWEEN 0 AND 100 AND \"Armor\" BETWEEN 0 AND 100 AND \"ArmorCoverage\" IS NOT NULL), FALSE)");
+            });
+            entity.HasKey(value => value.Id);
+            entity.Property(value => value.Name).HasMaxLength(120).IsRequired();
+            entity.Property(value => value.Description).HasMaxLength(500).IsRequired();
+            entity.Property(value => value.Category).HasMaxLength(16).IsRequired();
+            entity.Property(value => value.PortraitPath).HasMaxLength(500);
+            entity.Property(value => value.FigurePath).HasMaxLength(500);
+            entity.Property(value => value.WeaponName).HasMaxLength(120);
+            entity.Property(value => value.WeaponDamage).HasPrecision(7, 2);
+            entity.Property(value => value.WeaponAccuracy).HasPrecision(5, 2);
+            entity.Property(value => value.Armor).HasPrecision(5, 2);
+            entity.Property(value => value.ArmorCoverage).HasColumnType("jsonb");
         });
         modelBuilder.Entity<HuntingLootRow>(entity =>
         {

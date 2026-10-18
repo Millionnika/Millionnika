@@ -27,6 +27,11 @@ public static class AdminEndpoints
         admin.MapGet("/hunting/targets", async (IAdminService service, CancellationToken token) => Results.Ok(await service.GetHuntingTargetsAsync(token)));
         admin.MapPut("/hunting/targets/{id:guid}", async (Guid id, UpdateHuntingTargetRequest request, ClaimsPrincipal principal, IAdminService service, CancellationToken token) =>
             ToResult(await service.UpdateHuntingTargetAsync(GetUserId(principal), id, request, token)));
+        admin.MapGet("/npcs", async (NpcAdminService service, CancellationToken token) => Results.Ok(await service.GetAllAsync(token)));
+        admin.MapPost("/npcs", async (SaveNpcRequest request, ClaimsPrincipal principal, NpcAdminService service, CancellationToken token) =>
+            ToResult(await service.CreateAsync(GetUserId(principal), request, token), created: true));
+        admin.MapPut("/npcs/{id:guid}", async (Guid id, SaveNpcRequest request, ClaimsPrincipal principal, NpcAdminService service, CancellationToken token) =>
+            ToResult(await service.UpdateAsync(GetUserId(principal), id, request, token)));
         return endpoints;
     }
 

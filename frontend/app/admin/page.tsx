@@ -16,8 +16,10 @@ type ActionLog = { id: string; username: string; actionType: string; succeeded: 
 type AuditLog = { id: string; adminUsername: string; action: string; targetType: string; targetId: string; oldValue: string; newValue: string; reason: string; createdAtUtc: string };
 type HuntingLocation = { id: string; name: string; description: string; minimumHuntingLevel: number; isActive: boolean };
 type HuntingTarget = { id: string; locationId: string; name: string; description: string; minimumHuntingLevel: number; energyCost: number; health: number; strength: number; reflexes: number; toughness: number; agility: number; weaponName: string; weaponDamage: number; weaponAccuracy: number; clipSize: number; rateOfFireMin: number; rateOfFireMax: number; spareClips: number; armor: number; armorCoverage: string; rewardCredits: number; minimumCredits: number; maximumCredits: number; lootRows: { itemId: string; itemName: string; chancePercent: number; minimumQuantity: number; maximumQuantity: number }[]; rewardExperience: number; rewardHuntingExperience: number; isActive: boolean };
+type NpcCategory = "peaceful" | "robot" | "mutant" | "animal";
+type Npc = { id: string; source: "template" | "hunting"; category: NpcCategory; name: string; description: string; isActive: boolean; portraitPath: string | null; figurePath: string | null; health: number | null; strength: number | null; toughness: number | null; reflexes: number | null; agility: number | null; weaponName: string | null; weaponDamage: number | null; weaponAccuracy: number | null; armor: number | null; armorCoverage: string | null };
 const MAX_ECONOMY_VALUE = 1_000_000_000_000;
-type AdminTab = "players" | "items" | "activities" | "logs";
+type AdminTab = "players" | "items" | "activities" | "npcs" | "logs";
 type ActivityTab = "contracts" | "hacking" | "hunting";
 type HuntingTab = "locations" | "targets";
 
@@ -31,11 +33,14 @@ export default function AdminPage() {
   const [audits, setAudits] = useState<AuditLog[]>([]);
   const [huntingLocations, setHuntingLocations] = useState<HuntingLocation[]>([]);
   const [huntingTargets, setHuntingTargets] = useState<HuntingTarget[]>([]);
+  const [npcs, setNpcs] = useState<Npc[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [tab, setTab] = useState<AdminTab>("players");
   const [activityTab, setActivityTab] = useState<ActivityTab>("contracts");
   const [huntingTab, setHuntingTab] = useState<HuntingTab>("locations");
+  const [npcCategory, setNpcCategory] = useState<NpcCategory>("peaceful");
+  const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null);
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
@@ -52,14 +57,15 @@ export default function AdminPage() {
   }, [router]);
 
   const refresh = useCallback(async () => {
-    const [p, c, i, a, audit, locations, targets] = await Promise.all([
+    const [p, c, i, a, audit, locations, targets, npcResponse] = await Promise.all([
       request("/api/admin/players"), request("/api/admin/contracts"), request("/api/admin/items"),
       request("/api/admin/action-logs"), request("/api/admin/audit-logs"),
-      request("/api/admin/hunting/locations"), request("/api/admin/hunting/targets"),
+      request("/api/admin/hunting/locations"), request("/api/admin/hunting/targets"), request("/api/admin/npcs"),
     ]);
     setPlayers(await p.json()); setContracts(await c.json()); setItems(await i.json());
     setActions(await a.json()); setAudits(await audit.json());
     setHuntingLocations(await locations.json()); setHuntingTargets(await targets.json());
+    setNpcs(await npcResponse.json());
   }, [request]);
 
   useEffect(() => { void refresh().catch((reason) => setError(reason.message)); }, [refresh]);
@@ -102,6 +108,19 @@ export default function AdminPage() {
     } catch (reason) { setError((reason as Error).message); }
   }
 
+  async function saveNpc(event: FormEvent<HTMLFormElement>, id?: string) {
+    event.preventDefault(); setError(""); setMessage("");
+    const body = npcPayload(new FormData(event.currentTarget), npcCategory);
+    try {
+      const response = await request(id ? `/api/admin/npcs/${id}` : "/api/admin/npcs", {
+        method: id ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      setMessage((await response.json() as { message: string }).message);
+      await refresh();
+      if (!id) setSelectedNpcId(null);
+    } catch (reason) { setError((reason as Error).message); }
+  }
+
   function updateResources(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -116,6 +135,7 @@ export default function AdminPage() {
   const selectedTarget = huntingTargets.find((target) => target.id === selectedTargetId);
   const selectedContract = visibleContracts.find((contract) => contract.id === selectedContractId);
   const selectedItem = items.find((item) => item.id === selectedItemId);
+  const selectedNpc = npcs.find((npc) => npc.id === selectedNpcId && npc.category === npcCategory);
   const visibleLogs = logTab === "actions"
     ? actions.map((log) => ({ id: log.id, date: log.createdAtUtc, title: `${log.username} · ${log.actionType}`, text: log.message }))
     : audits.map((log) => ({ id: log.id, date: log.createdAtUtc, title: `${log.adminUsername} · ${log.action}`, text: `${log.reason} | Было: ${log.oldValue} | Стало: ${log.newValue}` }));
@@ -128,7 +148,7 @@ export default function AdminPage() {
       {message && <p className="action-result success">{message}</p>}
       {error && <p className="form-error">{error}</p>}
       <nav className="admin-tabs" aria-label="Разделы админки">
-        {([ ["players", "Игроки"], ["items", "Предметы"], ["activities", "Активности"], ["logs", "Журналы"] ] as const).map(([value, label]) => <button key={value} type="button" className={tab === value ? "selected" : ""} aria-current={tab === value ? "page" : undefined} onClick={() => { setTab(value); setMessage(""); setError(""); }}>{label}</button>)}
+        {([ ["players", "Игроки"], ["items", "Предметы"], ["activities", "Активности"], ["npcs", "НПЦ"], ["logs", "Журналы"] ] as const).map(([value, label]) => <button key={value} type="button" className={tab === value ? "selected" : ""} aria-current={tab === value ? "page" : undefined} onClick={() => { setTab(value); setMessage(""); setError(""); }}>{label}</button>)}
       </nav>
       {tab === "activities" && <nav className="admin-subtabs" aria-label="Активности">
         {([ ["contracts", "Контракты"], ["hacking", "Взлом"], ["hunting", "Охота"] ] as const).map(([value, label]) => <button key={value} type="button" className={activityTab === value ? "selected" : ""} aria-current={activityTab === value ? "page" : undefined} onClick={() => { setActivityTab(value); setSelectedContractId(null); }}>{label}</button>)}
@@ -193,6 +213,16 @@ export default function AdminPage() {
         </form>}
       </AdminSection>}
 
+      {tab === "npcs" && <AdminSection title="НПЦ">
+        <nav className="admin-subtabs" aria-label="Категории НПЦ">
+          {([ ["peaceful", "Мирные"], ["robot", "Роботы"], ["mutant", "Мутанты"], ["animal", "Животные"] ] as const).map(([value, label]) =>
+            <button key={value} type="button" className={npcCategory === value ? "selected" : ""} onClick={() => { setNpcCategory(value); setSelectedNpcId(null); }}>{label}</button>)}
+        </nav>
+        <AdminRecordList rows={npcs.filter((npc) => npc.category === npcCategory).map((npc) => ({ id: npc.id, title: npc.name, detail: `${npc.portraitPath ? "Портрет задан" : "Портрет: заглушка"} · ${npc.source === "hunting" ? "В охоте" : "Шаблон"} · ${npc.isActive ? "активен" : "отключён"}` }))} selectedId={selectedNpcId} onSelect={setSelectedNpcId} createLabel="Новый НПЦ" onCreate={() => setSelectedNpcId("new")} />
+        {selectedNpcId === "new" && <NpcEditor key={`new-${npcCategory}`} category={npcCategory} onSubmit={(event) => void saveNpc(event)} />}
+        {selectedNpc && <NpcEditor key={selectedNpc.id} category={npcCategory} npc={selectedNpc} onSubmit={(event) => void saveNpc(event, selectedNpc.id)} />}
+      </AdminSection>}
+
       {tab === "logs" && <AdminSection title="Журналы"><nav className="admin-subtabs" aria-label="Вид журнала"><button type="button" className={logTab === "actions" ? "selected" : ""} onClick={() => { setLogTab("actions"); setSelectedLogId(null); }}>Действия игроков</button><button type="button" className={logTab === "audits" ? "selected" : ""} onClick={() => { setLogTab("audits"); setSelectedLogId(null); }}>Изменения администратора</button></nav><AdminRecordList rows={visibleLogs.map((log) => ({ id: log.id, title: log.title, detail: new Date(log.date).toLocaleString("ru-RU") }))} selectedId={selectedLogId} onSelect={setSelectedLogId} />{selectedLog && <article className="admin-editor"><h3>{selectedLog.title}</h3><time>{new Date(selectedLog.date).toLocaleString("ru-RU")}</time><p>{selectedLog.text}</p></article>}</AdminSection>}
     </section></main>
   );
@@ -202,6 +232,49 @@ function AdminSection({ title, children }: Readonly<{ title: string; children: R
 function AdminRecordList({ rows, selectedId, onSelect, createLabel, onCreate }: Readonly<{ rows: { id: string; title: string; detail: string }[]; selectedId: string | null; onSelect: (id: string) => void; createLabel?: string; onCreate?: () => void }>) { return <div className="admin-list">{onCreate && <button type="button" className={`admin-row admin-create${selectedId === "new" ? " selected" : ""}`} onClick={onCreate}>＋ {createLabel}</button>}{rows.map((row) => <button type="button" className={`admin-row${selectedId === row.id ? " selected" : ""}`} key={row.id} onClick={() => onSelect(row.id)}><span>{row.title}</span><small>{row.detail}</small></button>)}</div>; }
 function AdminGroup({ title, children, wide = false }: Readonly<{ title: string; children: React.ReactNode; wide?: boolean }>) { return <fieldset className={`admin-group${wide ? " wide" : ""}`}><legend>{title}</legend><div className="admin-group-fields">{children}</div></fieldset>; }
 function AdminActions({ children }: Readonly<{ children: React.ReactNode }>) { return <div className="admin-actions">{children}</div>; }
+function NpcEditor({ category, npc, onSubmit }: Readonly<{ category: NpcCategory; npc?: Npc; onSubmit: (event: FormEvent<HTMLFormElement>) => void }>) {
+  const [currentCategory, setCurrentCategory] = useState<NpcCategory>(npc?.category ?? category);
+  const requiredCombat = currentCategory !== "peaceful";
+  const number = (name: "health" | "strength" | "toughness" | "reflexes" | "agility" | "weaponDamage" | "weaponAccuracy" | "armor", label: string, min: number, max: number, step?: string) => <label>{label}<input name={name} type="number" defaultValue={npc?.[name] ?? ""} min={min} max={max} step={step} required={requiredCombat} /></label>;
+  return <form className="admin-editor admin-form" onSubmit={onSubmit}>
+    <h3>{npc ? npc.name : "Новый НПЦ"}</h3>
+    {npc?.source === "hunting" && <p>Этот робот уже участвует в охоте. Изменения имени, боевых параметров и активности действуют на будущие бои; награды и условия охоты редактируются в «Активности → Охота».</p>}
+    <AdminGroup title="Основное" wide>
+      <label>Название<input name="name" defaultValue={npc?.name ?? ""} maxLength={120} required /></label>
+      <label>Описание<textarea name="description" defaultValue={npc?.description ?? ""} maxLength={500} required /></label>
+      {npc?.source === "hunting" ? <input type="hidden" name="category" value="robot" /> : <label>Категория<select name="category" value={currentCategory} onChange={(event) => setCurrentCategory(event.target.value as NpcCategory)}><option value="peaceful">Мирные</option><option value="robot">Роботы</option><option value="mutant">Мутанты</option><option value="animal">Животные</option></select></label>}
+      <CheckField name="isActive" label="Активен" checked={npc?.isActive ?? true} />
+    </AdminGroup>
+    <AdminGroup title="Изображения" wide>
+      <label>Портрет в списках (HTTPS или путь от /)<input name="portraitPath" defaultValue={npc?.portraitPath ?? ""} maxLength={500} placeholder="/images/npc/portrait.png" /></label>
+      <label>Фигура в бою (HTTPS или путь от /)<input name="figurePath" defaultValue={npc?.figurePath ?? ""} maxLength={500} placeholder="/images/npc/figure.png" /></label>
+      <p>Портрет: {npc?.portraitPath || "Нет изображения — будет заглушка"}. Фигура: {npc?.figurePath || "Нет изображения — будет заглушка"}.</p>
+    </AdminGroup>
+    <AdminGroup title={requiredCombat ? "Боевые характеристики" : "Боевые характеристики (необязательно)"}>
+      {number("health", "Здоровье", 1, 1_000_000)}
+      {number("strength", "Сила (STR)", 1, 1_000_000)}
+      {number("toughness", "Стойкость (TGH)", 1, 1_000_000)}
+      {number("reflexes", "Реакция (REF)", 1, 1_000_000)}
+      {number("agility", "Ловкость (AGI)", 1, 1_000_000)}
+      <label>Оружие / тип атаки<input name="weaponName" defaultValue={npc?.weaponName ?? ""} maxLength={120} required={requiredCombat} /></label>
+      {number("weaponDamage", "Урон оружия", 1, 1000, "0.01")}
+      {number("weaponAccuracy", "Точность", 0, 100, "0.01")}
+      {number("armor", "Защита", 0, 100, "0.01")}
+      <label>Покрытие защиты (JSON)<textarea name="armorCoverage" defaultValue={npc?.armorCoverage ?? (requiredCombat ? "{}" : "")} required={requiredCombat} /></label>
+    </AdminGroup>
+    <AdminActions><ReasonField /><button className="primary-button" type="submit">{npc ? "Сохранить НПЦ" : "Создать НПЦ"}</button></AdminActions>
+  </form>;
+}
+function npcPayload(form: FormData, fallbackCategory: NpcCategory) {
+  const nullableNumber = (name: string) => { const raw = String(form.get(name) ?? "").trim(); return raw === "" ? null : Number(raw); };
+  const nullableText = (name: string) => String(form.get(name) ?? "").trim() || null;
+  return { category: form.get("category") ?? fallbackCategory, name: form.get("name"), description: form.get("description"),
+    isActive: form.get("isActive") === "on", portraitPath: nullableText("portraitPath"), figurePath: nullableText("figurePath"),
+    health: nullableNumber("health"), strength: nullableNumber("strength"), toughness: nullableNumber("toughness"),
+    reflexes: nullableNumber("reflexes"), agility: nullableNumber("agility"), weaponName: nullableText("weaponName"),
+    weaponDamage: nullableNumber("weaponDamage"), weaponAccuracy: nullableNumber("weaponAccuracy"),
+    armor: nullableNumber("armor"), armorCoverage: nullableText("armorCoverage"), reason: form.get("reason") };
+}
 function NumberField({ name, label, value, min, max, step }: Readonly<{ name: string; label: string; value: number; min?: number; max?: number; step?: string }>) { return <label>{label}<input name={name} type="number" defaultValue={value} min={min} max={max} step={step} required /></label>; }
 function ReasonField() { return <label className="reason-field">Причина<input name="reason" minLength={3} maxLength={500} required /></label>; }
 function CheckField({ name, label, checked }: Readonly<{ name: string; label: string; checked: boolean }>) { return <label className="check-field"><input name={name} type="checkbox" defaultChecked={checked} />{label}</label>; }

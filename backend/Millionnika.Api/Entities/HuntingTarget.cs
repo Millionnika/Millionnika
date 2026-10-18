@@ -7,6 +7,8 @@ public sealed class HuntingTarget
     public HuntingLocation Location { get; set; } = null!;
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public string? PortraitPath { get; set; }
+    public string? FigurePath { get; set; }
     public int MinimumHuntingLevel { get; set; } = 1;
     public int EnergyCost { get; set; }
     public int Health { get; set; }

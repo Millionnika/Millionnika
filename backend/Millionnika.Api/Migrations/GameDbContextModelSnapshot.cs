@@ -619,6 +619,10 @@ namespace Millionnika.Api.Migrations
                     b.Property<int>("EnergyCost")
                         .HasColumnType("integer");
 
+                    b.Property<string>("FigurePath")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<int>("Health")
                         .HasColumnType("integer");
 
@@ -641,6 +645,10 @@ namespace Millionnika.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
+
+                    b.Property<string>("PortraitPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<int>("RateOfFireMax")
                         .HasColumnType("integer");
@@ -878,6 +886,82 @@ namespace Millionnika.Api.Migrations
                             RateOfFireMax = 0,
                             RateOfFireMin = 0,
                             Type = "consumable"
+                        });
+                });
+
+            modelBuilder.Entity("Millionnika.Api.Entities.NpcTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("Agility")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("Armor")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<string>("ArmorCoverage")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("FigurePath")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("Health")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("PortraitPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("Reflexes")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("Strength")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("Toughness")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("WeaponAccuracy")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal?>("WeaponDamage")
+                        .HasPrecision(7, 2)
+                        .HasColumnType("numeric(7,2)");
+
+                    b.Property<string>("WeaponName")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("npc_templates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_npc_templates_Category", "\"Category\" IN ('peaceful','robot','mutant','animal')");
+
+                            t.HasCheckConstraint("CK_npc_templates_Combat", "\"Category\" = 'peaceful' OR COALESCE((\"Health\" BETWEEN 1 AND 1000000 AND \"Strength\" BETWEEN 1 AND 1000000 AND \"Toughness\" BETWEEN 1 AND 1000000 AND \"Reflexes\" BETWEEN 1 AND 1000000 AND \"Agility\" BETWEEN 1 AND 1000000 AND \"WeaponName\" IS NOT NULL AND \"WeaponName\" <> '' AND \"WeaponDamage\" BETWEEN 1 AND 1000 AND \"WeaponAccuracy\" BETWEEN 0 AND 100 AND \"Armor\" BETWEEN 0 AND 100 AND \"ArmorCoverage\" IS NOT NULL), FALSE)");
                         });
                 });
 
