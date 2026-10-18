@@ -17,8 +17,10 @@ public sealed class HuntingAssignmentAdminService(GameDbContext db)
     public async Task<AdminMutationResult> AssignAsync(Guid adminId, Guid locationId,
         AssignHuntingNpcRequest request, CancellationToken token)
     {
-        if (locationId == Guid.Empty || request.NpcId == Guid.Empty || !AdminRules.IsReasonValid(request.Reason))
-            return AdminMutationResult.Failure("Выберите локацию и НПЦ, укажите причину.");
+        var comment = request.Comment ?? request.Reason;
+        if (locationId == Guid.Empty || request.NpcId == Guid.Empty || !IsCommentValid(comment))
+            return AdminMutationResult.Failure("Выберите локацию и НПЦ; комментарий должен быть не длиннее 500 символов.");
+        comment = CleanComment(comment);
 
         await using var transaction = await db.Database.BeginTransactionAsync(token);
         var location = await db.HuntingLocations.FromSqlInterpolated(
@@ -61,7 +63,8 @@ public sealed class HuntingAssignmentAdminService(GameDbContext db)
             db.NpcTemplates.Remove(template);
             db.HuntingTargets.Add(target);
             AddAudit(adminId, "npc_hunting_setup", target.Id.ToString(),
-                new { source = "template" }, new { source = "hunting", setup }, request.Reason!);
+                new { source = "template" }, new { source = "hunting", npcName = target.Name, setup, comment },
+                $"Настроил охоту для НПЦ «{target.Name}».");
         }
         else if (request.Setup is not null)
         {
@@ -72,7 +75,9 @@ public sealed class HuntingAssignmentAdminService(GameDbContext db)
             return AdminMutationResult.Failure("Этот НПЦ уже назначен в выбранную локацию.");
         db.HuntingLocationTargets.Add(new HuntingLocationTarget { LocationId = locationId, TargetId = target.Id });
         AddAudit(adminId, "hunting_npc_assign", $"{locationId:N}{target.Id:N}",
-            new { assigned = false }, new { assigned = true, locationId, npcId = target.Id }, request.Reason!);
+            new { assigned = false },
+            new { assigned = true, locationId, locationName = location.Name, npcId = target.Id, npcName = target.Name, comment },
+            $"Добавил «{target.Name}» в «{location.Name}».");
         await db.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
         return AdminMutationResult.Success("НПЦ добавлен в локацию.");
@@ -81,19 +86,23 @@ public sealed class HuntingAssignmentAdminService(GameDbContext db)
     public async Task<AdminMutationResult> RemoveAsync(Guid adminId, Guid locationId, Guid npcId,
         RemoveHuntingNpcRequest request, CancellationToken token)
     {
-        if (locationId == Guid.Empty || npcId == Guid.Empty || !AdminRules.IsReasonValid(request.Reason))
-            return AdminMutationResult.Failure("Укажите причину снятия назначения.");
+        var comment = request.Comment ?? request.Reason;
+        if (locationId == Guid.Empty || npcId == Guid.Empty || !IsCommentValid(comment))
+            return AdminMutationResult.Failure("Укажите локацию и НПЦ; комментарий должен быть не длиннее 500 символов.");
+        comment = CleanComment(comment);
         await using var transaction = await db.Database.BeginTransactionAsync(token);
         // The same location lock serializes assignment and removal in this location.
         var location = await db.HuntingLocations.FromSqlInterpolated(
             $"SELECT * FROM hunting_locations WHERE \"Id\"={locationId} FOR UPDATE").SingleOrDefaultAsync(token);
         if (location is null) return AdminMutationResult.Failure("Локация не найдена.");
-        var assignment = await db.HuntingLocationTargets.SingleOrDefaultAsync(
+        var assignment = await db.HuntingLocationTargets.Include(value => value.Target).SingleOrDefaultAsync(
             value => value.LocationId == locationId && value.TargetId == npcId, token);
         if (assignment is null) return AdminMutationResult.Failure("НПЦ уже отсутствует в локации.");
         db.HuntingLocationTargets.Remove(assignment);
         AddAudit(adminId, "hunting_npc_remove", $"{locationId:N}{npcId:N}",
-            new { assigned = true, locationId, npcId }, new { assigned = false }, request.Reason!);
+            new { assigned = true, locationId, locationName = location.Name, npcId, npcName = assignment.Target.Name },
+            new { assigned = false, locationId, locationName = location.Name, npcId, npcName = assignment.Target.Name, comment },
+            $"Убрал «{assignment.Target.Name}» из «{location.Name}».");
         await db.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
         return AdminMutationResult.Success("НПЦ убран из локации. Сам НПЦ и начатые бои сохранены.");
@@ -109,6 +118,11 @@ public sealed class HuntingAssignmentAdminService(GameDbContext db)
         value.MaximumCredits >= value.MinimumCredits && value.MaximumCredits <= GameNumericLimits.MaxEconomyValue &&
         value.RewardExperience is >= 0 and <= GameNumericLimits.MaxEconomyValue &&
         value.RewardHuntingExperience is >= 0 and <= GameNumericLimits.MaxEconomyValue;
+
+    private static bool IsCommentValid(string? value) => value is null ||
+        value.Length <= 500 && !value.Any(character => char.IsControl(character) && character is not ('\r' or '\n' or '\t'));
+
+    private static string? CleanComment(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private void AddAudit(Guid adminId, string action, string targetId, object oldValue, object newValue, string reason) =>
         db.AdminAuditLogs.Add(new AdminAuditLog

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using Millionnika.Api.Admin;
 using Millionnika.Api.Entities;
 using Millionnika.Api.Tests.Infrastructure;
@@ -28,12 +29,14 @@ public sealed class NpcCatalogIntegrationTests
             await using var db = TestDatabase.CreateDbContext();
             var service = new HuntingAssignmentAdminService(db);
             var before = await db.HuntingTargets.AsNoTracking().Where(value => value.Id == robotId)
-                .Select(value => new { value.Health, value.RewardCredits, value.RewardExperience,
+                .Select(value => new { value.Name, value.Health, value.RewardCredits, value.RewardExperience,
                     value.RewardHuntingExperience }).SingleAsync();
             var lootCount = await db.HuntingLootRows.CountAsync(value => value.TargetId == robotId);
+            Assert.False((await service.AssignAsync(admin.Id, otherLocation,
+                new(robotId, new string('x', 501)), default)).Succeeded);
             await using var concurrentDb = TestDatabase.CreateDbContext();
             var attempts = await Task.WhenAll(
-                service.AssignAsync(admin.Id, otherLocation, new(robotId, "Тест второго места", null), default),
+                service.AssignAsync(admin.Id, otherLocation, new(robotId), default),
                 new HuntingAssignmentAdminService(concurrentDb).AssignAsync(admin.Id, otherLocation,
                     new(robotId, "Параллельное назначение", null), default));
             Assert.Equal(1, attempts.Count(value => value.Succeeded));
@@ -41,16 +44,23 @@ public sealed class NpcCatalogIntegrationTests
                 new(robotId, "Повтор назначения", null), default)).Succeeded);
             Assert.Equal(2, await db.HuntingLocationTargets.CountAsync(value => value.TargetId == robotId));
             Assert.True((await service.RemoveAsync(admin.Id, otherLocation, robotId,
-                new("Тест снятия"), default)).Succeeded);
+                new(), default)).Succeeded);
             Assert.False((await service.RemoveAsync(admin.Id, otherLocation, robotId,
                 new("Повтор снятия"), default)).Succeeded);
             Assert.True(await db.HuntingLocationTargets.AnyAsync(value => value.LocationId == originalLocation && value.TargetId == robotId));
             var after = await db.HuntingTargets.AsNoTracking().Where(value => value.Id == robotId)
-                .Select(value => new { value.Health, value.RewardCredits, value.RewardExperience,
+                .Select(value => new { value.Name, value.Health, value.RewardCredits, value.RewardExperience,
                     value.RewardHuntingExperience }).SingleAsync();
             Assert.Equal(before, after);
             Assert.Equal(lootCount, await db.HuntingLootRows.CountAsync(value => value.TargetId == robotId));
-            Assert.Equal(2, await db.AdminAuditLogs.CountAsync(value => value.AdminUserId == admin.Id));
+            var audit = await db.AdminAuditLogs.Where(value => value.AdminUserId == admin.Id).ToListAsync();
+            Assert.Equal(2, audit.Count);
+            Assert.All(audit, value =>
+            {
+                Assert.Contains(before.Name, value.Reason);
+                Assert.Contains("locationName", value.NewValue);
+            });
+            Assert.Contains(audit, value => value.Action == "hunting_npc_remove" && value.NewValue.Contains("\"comment\":null"));
         }
         finally
         {
@@ -101,6 +111,10 @@ public sealed class NpcCatalogIntegrationTests
             var npc = Assert.Single(await new NpcAdminService(db).GetAllAsync(default), value => value.Id == combatId);
             Assert.Equal(("hunting", "mutant", 30), (npc.Source, npc.Category, npc.Health));
             Assert.Equal(3, await db.AdminAuditLogs.CountAsync(value => value.AdminUserId == admin.Id));
+            var assignmentAudit = Assert.Single(await db.AdminAuditLogs.Where(value => value.AdminUserId == admin.Id &&
+                value.Action == "hunting_npc_assign").ToListAsync(), value =>
+                JsonDocument.Parse(value.NewValue).RootElement.GetProperty("comment").GetString() == "Первое назначение");
+            Assert.Contains("Тестовый мутант", assignmentAudit.Reason);
         }
         finally
         {

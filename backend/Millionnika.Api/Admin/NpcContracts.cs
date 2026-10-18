@@ -17,5 +17,6 @@ public sealed record HuntingSetupRequest(
     int MinimumHuntingLevel, int EnergyCost, int ClipSize, int RateOfFireMin, int RateOfFireMax,
     int SpareClips, long RewardCredits, long MinimumCredits, long MaximumCredits,
     long RewardExperience, long RewardHuntingExperience);
-public sealed record AssignHuntingNpcRequest(Guid NpcId, string? Reason, HuntingSetupRequest? Setup);
-public sealed record RemoveHuntingNpcRequest(string? Reason);
+public sealed record AssignHuntingNpcRequest(Guid NpcId, string? Comment = null,
+    HuntingSetupRequest? Setup = null, string? Reason = null);
+public sealed record RemoveHuntingNpcRequest(string? Comment = null, string? Reason = null);

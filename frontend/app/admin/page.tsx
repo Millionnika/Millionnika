@@ -14,6 +14,7 @@ type Contract = { id: string; name: string; description: string; costNerve: numb
 type Item = { id: string; name: string; description: string; price: number; type: string; effectResource: string; effectAmount: number; cooldownSeconds: number; cooldownGroup: string; isActive: boolean; allowedSlots: string; minimumDamage: number; maximumDamage: number; minimumAccuracy: number; maximumAccuracy: number; minimumArmor: number; maximumArmor: number; armorCoverage: string; caliber: string; clipSize: number; rateOfFireMin: number; rateOfFireMax: number };
 type ActionLog = { id: string; username: string; actionType: string; succeeded: boolean; message: string; createdAtUtc: string };
 type AuditLog = { id: string; adminUsername: string; action: string; targetType: string; targetId: string; oldValue: string; newValue: string; reason: string; createdAtUtc: string };
+type DisplayLog = { id: string; date: string; title: string; comment: string | null; technical?: AuditLog };
 type HuntingLocation = { id: string; name: string; description: string; minimumHuntingLevel: number; isActive: boolean };
 type HuntingTarget = { id: string; name: string; description: string; minimumHuntingLevel: number; energyCost: number; health: number; strength: number; reflexes: number; toughness: number; agility: number; weaponName: string; weaponDamage: number; weaponAccuracy: number; clipSize: number; rateOfFireMin: number; rateOfFireMax: number; spareClips: number; armor: number; armorCoverage: string; rewardCredits: number; minimumCredits: number; maximumCredits: number; lootRows: { itemId: string; itemName: string; chancePercent: number; minimumQuantity: number; maximumQuantity: number }[]; rewardExperience: number; rewardHuntingExperience: number; isActive: boolean };
 type HuntingAssignment = { locationId: string; npcId: string; name: string; category: string; isActive: boolean };
@@ -155,9 +156,9 @@ export default function AdminPage() {
   const selectedContract = visibleContracts.find((contract) => contract.id === selectedContractId);
   const selectedItem = items.find((item) => item.id === selectedItemId);
   const selectedNpc = npcs.find((npc) => npc.id === selectedNpcId && npc.category === npcCategory);
-  const visibleLogs = logTab === "actions"
-    ? actions.map((log) => ({ id: log.id, date: log.createdAtUtc, title: `${log.username} · ${log.actionType}`, text: log.message }))
-    : audits.map((log) => ({ id: log.id, date: log.createdAtUtc, title: `${log.adminUsername} · ${log.action}`, text: `${log.reason} | Было: ${log.oldValue} | Стало: ${log.newValue}` }));
+  const visibleLogs: DisplayLog[] = logTab === "actions"
+    ? actions.map((log) => ({ id: log.id, date: log.createdAtUtc, title: `${log.username} · ${log.actionType}`, comment: log.message }))
+    : audits.map((log) => formatAdminAudit(log, huntingLocations, npcs));
   const selectedLog = visibleLogs.find((log) => log.id === selectedLogId);
 
   return (
@@ -196,36 +197,38 @@ export default function AdminPage() {
 
       {tab === "activities" && activityTab === "hunting" && huntingTab === "locations" && <AdminSection title="Локации">
         <AdminRecordList rows={huntingLocations.map((location) => ({ id: location.id, title: location.name, detail: `Уровень охоты ${location.minimumHuntingLevel}` }))} selectedId={selectedLocationId} onSelect={setSelectedLocationId} />
-        {selectedLocation && <form className="admin-editor admin-form" key={selectedLocation.id} onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void mutate(`/api/admin/hunting/locations/${selectedLocation.id}`, { name: form.get("name"), description: form.get("description"), minimumHuntingLevel: Number(form.get("minimumHuntingLevel")), isActive: form.get("isActive") === "on", reason: form.get("reason") }); }}>
+        {selectedLocation && <div className="admin-location-content" key={selectedLocation.id}>
+        <form className="admin-editor admin-form" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); void mutate(`/api/admin/hunting/locations/${selectedLocation.id}`, { name: form.get("name"), description: form.get("description"), minimumHuntingLevel: Number(form.get("minimumHuntingLevel")), isActive: form.get("isActive") === "on", reason: form.get("reason") }); }}>
           <h3>{selectedLocation.name}</h3><AdminGroup title="Основное" wide><label>Название<input name="name" defaultValue={selectedLocation.name} maxLength={120} required /></label><label>Описание<textarea name="description" defaultValue={selectedLocation.description} maxLength={500} required /></label></AdminGroup><AdminGroup title="Доступность"><NumberField name="minimumHuntingLevel" label="Уровень охоты" value={selectedLocation.minimumHuntingLevel} min={1} max={20} /><CheckField name="isActive" label="Активна" checked={selectedLocation.isActive} /></AdminGroup><AdminActions><ReasonField /><button className="primary-button" type="submit">Сохранить локацию</button></AdminActions>
-        </form>}
-        {selectedLocation && <div className="admin-editor" key={`assign-${selectedLocation.id}`}>
+        </form>
+        <div className="admin-editor">
           <h3>НПЦ в локации «{selectedLocation.name}»</h3>
           {assignedHere.length === 0 && <p>Пока никто не назначен.</p>}
-          <div className="admin-list">{assignedHere.map((assignment) =>
+          <div className="admin-assignment-list">{assignedHere.map((assignment) =>
             <form className="admin-inline-form" key={assignment.npcId} onSubmit={(event) => {
               event.preventDefault(); const form = new FormData(event.currentTarget);
               void changeAssignment(`/api/admin/hunting/locations/${selectedLocation.id}/npcs/${assignment.npcId}`,
-                "DELETE", { reason: form.get("reason") });
-            }}><span>{assignment.name} · {assignment.category}{assignment.isActive ? "" : " · отключён"}</span>
-              <ReasonField /><button className="secondary-button" type="submit">Убрать</button>
+                "DELETE", { comment: form.get("comment") });
+            }}><span>{assignment.name} · {npcCategoryLabel(assignment.category)}{assignment.isActive ? "" : " · отключён"}</span>
+              <CommentField /><button className="secondary-button" type="submit">Убрать из локации</button>
             </form>)}</div>
+          {availableNpcs.length === 0 && <p>Все доступные боевые НПЦ уже добавлены</p>}
           {availableNpcs.length > 0 && <form className="admin-form" onSubmit={(event) => {
             event.preventDefault(); const form = new FormData(event.currentTarget);
             const npc = availableNpcs.find((value) => value.id === String(form.get("npcId")));
             if (!npc) return;
             const setup = npc.source === "template" ? huntingSetupPayload(form) : null;
             void changeAssignment(`/api/admin/hunting/locations/${selectedLocation.id}/npcs`, "PUT",
-              { npcId: npc.id, setup, reason: form.get("reason") });
+              { npcId: npc.id, setup, comment: form.get("comment") });
           }}>
             <label>Боевой НПЦ<select name="npcId" value={assignmentNpcId} onChange={(event) => setAssignmentNpcId(event.target.value)} required>
               <option value="">Выберите НПЦ</option>
-              {availableNpcs.map((npc) => <option key={npc.id} value={npc.id}>{npc.name} · {npc.category}{npc.source === "template" ? " · без настроек охоты" : ""}</option>)}
+              {availableNpcs.map((npc) => <option key={npc.id} value={npc.id}>{npc.name} · {npcCategoryLabel(npc.category)}{npc.source === "template" ? " · без настроек охоты" : ""}</option>)}
             </select></label>
             {assignmentNpc?.source === "template" && <HuntingSetupFields />}
-            {assignmentNpc && <AdminActions><ReasonField /><button className="primary-button" type="submit">Добавить</button></AdminActions>}
+            {assignmentNpc && <AdminActions><CommentField /><button className="primary-button" type="submit">Добавить</button></AdminActions>}
           </form>}
-        </div>}
+        </div></div>}
       </AdminSection>}
 
       {tab === "activities" && activityTab === "hunting" && huntingTab === "targets" && <AdminSection title="Роботы">
@@ -269,7 +272,7 @@ export default function AdminPage() {
         {selectedNpc && <NpcEditor key={selectedNpc.id} category={npcCategory} npc={selectedNpc} onSubmit={(event) => void saveNpc(event, selectedNpc.id)} />}
       </AdminSection>}
 
-      {tab === "logs" && <AdminSection title="Журналы"><nav className="admin-subtabs" aria-label="Вид журнала"><button type="button" className={logTab === "actions" ? "selected" : ""} onClick={() => { setLogTab("actions"); setSelectedLogId(null); }}>Действия игроков</button><button type="button" className={logTab === "audits" ? "selected" : ""} onClick={() => { setLogTab("audits"); setSelectedLogId(null); }}>Изменения администратора</button></nav><AdminRecordList rows={visibleLogs.map((log) => ({ id: log.id, title: log.title, detail: new Date(log.date).toLocaleString("ru-RU") }))} selectedId={selectedLogId} onSelect={setSelectedLogId} />{selectedLog && <article className="admin-editor"><h3>{selectedLog.title}</h3><time>{new Date(selectedLog.date).toLocaleString("ru-RU")}</time><p>{selectedLog.text}</p></article>}</AdminSection>}
+      {tab === "logs" && <AdminSection title="Журналы"><nav className="admin-subtabs" aria-label="Вид журнала"><button type="button" className={logTab === "actions" ? "selected" : ""} onClick={() => { setLogTab("actions"); setSelectedLogId(null); }}>Действия игроков</button><button type="button" className={logTab === "audits" ? "selected" : ""} onClick={() => { setLogTab("audits"); setSelectedLogId(null); }}>Изменения администратора</button></nav><AdminRecordList rows={visibleLogs.map((log) => ({ id: log.id, title: log.title, detail: new Date(log.date).toLocaleString("ru-RU") }))} selectedId={selectedLogId} onSelect={setSelectedLogId} />{selectedLog && <article className="admin-editor"><h3>{selectedLog.title}</h3><time>{new Date(selectedLog.date).toLocaleString("ru-RU")}</time>{selectedLog.comment && <p>Комментарий: {selectedLog.comment}</p>}{selectedLog.technical && <details><summary>Технические подробности</summary><pre>{JSON.stringify({ action: selectedLog.technical.action, targetType: selectedLog.technical.targetType, targetId: selectedLog.technical.targetId, oldValue: parseAuditValue(selectedLog.technical.oldValue), newValue: parseAuditValue(selectedLog.technical.newValue) }, null, 2)}</pre></details>}</article>}</AdminSection>}
     </section></main>
   );
 }
@@ -347,6 +350,37 @@ function huntingSetupPayload(form: FormData) { const value = (name: string) => N
   rewardExperience: value("rewardExperience"), rewardHuntingExperience: value("rewardHuntingExperience") };
 }
 function ReasonField() { return <label className="reason-field">Причина<input name="reason" minLength={3} maxLength={500} required /></label>; }
+function CommentField() { return <label className="comment-field">Комментарий (необязательно)<input name="comment" maxLength={500} /></label>; }
+function npcCategoryLabel(category: string) { return ({ robot: "Робот", mutant: "Мутант", animal: "Животное", peaceful: "Мирный" } as Record<string, string>)[category] ?? "НПЦ"; }
+function parseAuditValue(value: string): Record<string, unknown> {
+  try { const parsed: unknown = JSON.parse(value); return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {}; }
+  catch { return {}; }
+}
+function auditText(value: Record<string, unknown>, key: string): string | null {
+  return typeof value[key] === "string" ? value[key] as string : null;
+}
+function formatAdminAudit(log: AuditLog, locations: HuntingLocation[], npcs: Npc[]): DisplayLog {
+  const before = parseAuditValue(log.oldValue);
+  const after = parseAuditValue(log.newValue);
+  if (log.action === "hunting_npc_assign" || log.action === "hunting_npc_remove") {
+    const locationId = auditText(after, "locationId") ?? auditText(before, "locationId");
+    const npcId = auditText(after, "npcId") ?? auditText(before, "npcId");
+    const locationName = auditText(after, "locationName") ?? auditText(before, "locationName") ?? locations.find((value) => value.id === locationId)?.name ?? "локацию";
+    const npcName = auditText(after, "npcName") ?? auditText(before, "npcName") ?? npcs.find((value) => value.id === npcId)?.name ?? "НПЦ";
+    const verb = log.action === "hunting_npc_assign" ? "добавил" : "убрал";
+    const preposition = log.action === "hunting_npc_assign" ? "в" : "из";
+    const comment = auditText(after, "comment") ?? (auditText(after, "locationName") ? null : log.reason);
+    return { id: log.id, date: log.createdAtUtc,
+      title: `${log.adminUsername} ${verb} «${npcName}» ${preposition} «${locationName}»`, comment, technical: log };
+  }
+  const labels: Record<string, string> = { admin_created: "создал администратора", player_block: "изменил блокировку игрока",
+    resources_update: "изменил ресурсы игрока", contract_create: "создал контракт", contract_update: "изменил контракт",
+    item_create: "создал предмет", item_update: "изменил предмет", hunting_location_update: "изменил локацию охоты",
+    hunting_target_update: "изменил цель охоты", npc_create: "создал НПЦ", npc_update: "изменил НПЦ",
+    npc_hunting_robot_update: "изменил боевого НПЦ", npc_hunting_setup: "настроил охоту для НПЦ" };
+  return { id: log.id, date: log.createdAtUtc, title: `${log.adminUsername} ${labels[log.action] ?? "изменил данные"}`,
+    comment: "comment" in after ? auditText(after, "comment") : log.reason, technical: log };
+}
 function CheckField({ name, label, checked }: Readonly<{ name: string; label: string; checked: boolean }>) { return <label className="check-field"><input name={name} type="checkbox" defaultChecked={checked} />{label}</label>; }
 function ContractProgressionFields({ contract, direction = "normal" }: Readonly<{ contract?: Contract; direction?: "normal" | "hacking" }>) { return <><label>Направление<select name="direction" defaultValue={contract?.direction ?? direction}><option value="normal">Обычный</option><option value="hacking">Взлом</option></select></label><NumberField name="minimumLevel" label="Минимальный общий уровень" value={contract?.minimumLevel ?? 1} min={1} max={20} /><NumberField name="minimumHackingLevel" label="Минимальный Взлом" value={contract?.minimumHackingLevel ?? 1} min={1} max={20} /></>; }
 function contractPayload(form: FormData) { return { name: form.get("name"), description: form.get("description"), direction: form.get("direction"), minimumLevel: Number(form.get("minimumLevel")), minimumHackingLevel: Number(form.get("minimumHackingLevel")), costNerve: Number(form.get("costNerve")), successChance: Number(form.get("successChance")), rewardCredits: Number(form.get("rewardCredits")), rewardExperience: Number(form.get("rewardExperience")), rewardHackingExperience: Number(form.get("rewardHackingExperience")), isActive: form.get("isActive") === "on", reason: form.get("reason") }; }

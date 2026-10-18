@@ -353,6 +353,11 @@ input:focus, textarea:focus, select:focus { border-color: var(--teal); box-shado
 .admin-create { color: var(--teal-dark); font-weight: 750; }
 .admin-editor { margin-top: 10px; padding: 14px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-soft); }
 .admin-section > .admin-editor { min-width: 0; margin-top: 0; }
+.admin-location-content { min-width: 0; display: grid; gap: 14px; }
+.admin-location-content > .admin-editor { min-width: 0; margin-top: 0; }
+.admin-assignment-list { display: grid; gap: 8px; }
+.admin-assignment-list .admin-inline-form { flex-wrap: wrap; margin-top: 0; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.admin-assignment-list .admin-inline-form > span { flex: 1 1 180px; min-width: 0; }
 .admin-editor h3 { grid-column: 1 / -1; margin: 0; }
 .admin-editor > p { color: var(--muted); }
 .admin-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px; }
@@ -367,6 +372,9 @@ input:focus, textarea:focus, select:focus { border-color: var(--teal); box-shado
 .admin-group-fields textarea { min-height: 84px; }
 .admin-actions { display: flex; grid-column: 1 / -1; align-items: end; justify-content: flex-end; gap: 10px; }
 .admin-actions .reason-field { flex: 1; max-width: 520px; }
+.admin-actions .comment-field { flex: 1; max-width: 520px; }
+.admin-editor details { margin-top: 12px; }
+.admin-editor details pre { overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .82rem; }
 .admin-form textarea { min-height: 80px; resize: vertical; }
 .admin-form .reason-field { grid-column: span 2; }
 .admin-form .check-field { display: flex; align-items: center; gap: 7px; }
@@ -432,6 +440,7 @@ input:focus, textarea:focus, select:focus { border-color: var(--teal); box-shado
   .admin-group-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-actions { align-items: stretch; flex-direction: column; }
   .admin-actions .reason-field { max-width: none; }
+  .admin-actions .comment-field { max-width: none; }
   .admin-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-tabs button, .admin-subtabs button { flex: 1; }
   .admin-inline-form, .admin-row, .player-search, .pagination { align-items: stretch; flex-direction: column; }
