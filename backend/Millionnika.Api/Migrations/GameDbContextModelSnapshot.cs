@@ -157,6 +157,23 @@ namespace Millionnika.Api.Migrations
                     b.ToTable("admin_audit_logs", (string)null);
                 });
 
+            modelBuilder.Entity("Millionnika.Api.Entities.ConsumableCooldown", b =>
+                {
+                    b.Property<Guid>("CharacterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Group")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("AvailableAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("CharacterId", "Group");
+
+                    b.ToTable("consumable_cooldowns", (string)null);
+                });
+
             modelBuilder.Entity("Millionnika.Api.Entities.Contract", b =>
                 {
                     b.Property<Guid>("Id")
@@ -654,6 +671,14 @@ namespace Millionnika.Api.Migrations
                     b.Property<int>("ClipSize")
                         .HasColumnType("integer");
 
+                    b.Property<string>("CooldownGroup")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("CooldownSeconds")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -719,6 +744,8 @@ namespace Millionnika.Api.Migrations
                         {
                             t.HasCheckConstraint("CK_items_Ammo", "\"ClipSize\" BETWEEN 0 AND 1000 AND \"RateOfFireMin\" BETWEEN 0 AND 1000 AND \"RateOfFireMax\" BETWEEN \"RateOfFireMin\" AND 1000");
 
+                            t.HasCheckConstraint("CK_items_Cooldown", "\"CooldownSeconds\" BETWEEN 0 AND 86400 AND ((\"Type\" = 'consumable' AND ((\"CooldownSeconds\" = 0 AND \"CooldownGroup\" = '') OR (\"CooldownSeconds\" > 0 AND \"CooldownGroup\" <> ''))) OR (\"Type\" <> 'consumable' AND \"CooldownSeconds\" = 0 AND \"CooldownGroup\" = ''))");
+
                             t.HasCheckConstraint("CK_items_EffectAmount", "(\"Type\" = 'consumable' AND \"EffectAmount\" > 0) OR (\"Type\" IN ('weapon','armor','ammunition') AND \"EffectAmount\" = 0)");
 
                             t.HasCheckConstraint("CK_items_EquipmentRatings", "\"MinimumDamage\" BETWEEN 0 AND 1000 AND \"MaximumDamage\" BETWEEN \"MinimumDamage\" AND 1000 AND \"MinimumAccuracy\" BETWEEN 0 AND 100 AND \"MaximumAccuracy\" BETWEEN \"MinimumAccuracy\" AND 100 AND \"MinimumArmor\" BETWEEN 0 AND 100 AND \"MaximumArmor\" BETWEEN \"MinimumArmor\" AND 100");
@@ -734,6 +761,8 @@ namespace Millionnika.Api.Migrations
                             ArmorCoverage = "{}",
                             Caliber = "",
                             ClipSize = 0,
+                            CooldownGroup = "",
+                            CooldownSeconds = 0,
                             Description = "Быстрый нейропитательный батончик. Восстанавливает 10 энергии.",
                             EffectAmount = 10,
                             EffectResource = "energy",
@@ -757,6 +786,8 @@ namespace Millionnika.Api.Migrations
                             ArmorCoverage = "{}",
                             Caliber = "",
                             ClipSize = 0,
+                            CooldownGroup = "",
+                            CooldownSeconds = 0,
                             Description = "Стабилизирует нервную систему. Восстанавливает 3 хладнокровия.",
                             EffectAmount = 3,
                             EffectResource = "nerve",
@@ -780,6 +811,8 @@ namespace Millionnika.Api.Migrations
                             ArmorCoverage = "{}",
                             Caliber = "",
                             ClipSize = 0,
+                            CooldownGroup = "",
+                            CooldownSeconds = 0,
                             Description = "Медицинский наногель. Восстанавливает 20 здоровья.",
                             EffectAmount = 20,
                             EffectResource = "health",
@@ -925,6 +958,15 @@ namespace Millionnika.Api.Migrations
                         .IsRequired();
 
                     b.Navigation("AdminUser");
+                });
+
+            modelBuilder.Entity("Millionnika.Api.Entities.ConsumableCooldown", b =>
+                {
+                    b.HasOne("Millionnika.Api.Entities.GameCharacter", null)
+                        .WithMany()
+                        .HasForeignKey("CharacterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Millionnika.Api.Entities.EquipmentInstance", b =>

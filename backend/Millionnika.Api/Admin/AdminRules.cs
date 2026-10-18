@@ -66,6 +66,8 @@ public static class AdminRules
         item.Description = request.Description?.Trim() ?? string.Empty;
         item.EffectResource = request.EffectResource?.Trim() ?? string.Empty;
         item.EffectAmount = request.EffectAmount;
+        item.CooldownSeconds = request.CooldownSeconds;
+        item.CooldownGroup = request.CooldownGroup?.Trim() ?? string.Empty;
         item.MinimumDamage = request.MinimumDamage; item.MaximumDamage = request.MaximumDamage;
         item.MinimumAccuracy = request.MinimumAccuracy; item.MaximumAccuracy = request.MaximumAccuracy;
         item.MinimumArmor = request.MinimumArmor; item.MaximumArmor = request.MaximumArmor;

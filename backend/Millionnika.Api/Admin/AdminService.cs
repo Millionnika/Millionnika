@@ -162,7 +162,8 @@ public sealed class AdminService(
                 item.EffectResource, item.EffectAmount, item.IsActive, item.AllowedSlots,
                 item.MinimumDamage, item.MaximumDamage, item.MinimumAccuracy, item.MaximumAccuracy,
                 item.MinimumArmor, item.MaximumArmor, item.ArmorCoverage,
-                item.Caliber, item.ClipSize, item.RateOfFireMin, item.RateOfFireMax))
+                item.Caliber, item.ClipSize, item.RateOfFireMin, item.RateOfFireMax,
+                item.CooldownSeconds, item.CooldownGroup))
             .ToListAsync(cancellationToken);
 
     public async Task<AdminMutationResult> CreateItemAsync(
@@ -174,6 +175,7 @@ public sealed class AdminService(
             Description = request.Description?.Trim() ?? string.Empty, Price = request.Price,
             Type = request.Type, EffectResource = request.EffectResource?.Trim() ?? string.Empty,
             EffectAmount = request.EffectAmount, AllowedSlots = request.AllowedSlots?.Trim() ?? string.Empty,
+            CooldownSeconds = request.CooldownSeconds, CooldownGroup = request.CooldownGroup?.Trim() ?? string.Empty,
             MinimumDamage = request.MinimumDamage, MaximumDamage = request.MaximumDamage,
             MinimumAccuracy = request.MinimumAccuracy, MaximumAccuracy = request.MaximumAccuracy,
             MinimumArmor = request.MinimumArmor, MaximumArmor = request.MaximumArmor,
@@ -306,7 +308,8 @@ public sealed class AdminService(
         item.Name, item.Price, item.Description, item.Type, item.EffectResource, item.EffectAmount,
         item.AllowedSlots, item.MinimumDamage, item.MaximumDamage, item.MinimumAccuracy,
         item.MaximumAccuracy, item.MinimumArmor, item.MaximumArmor, item.ArmorCoverage,
-        item.Caliber, item.ClipSize, item.RateOfFireMin, item.RateOfFireMax, item.IsActive
+        item.Caliber, item.ClipSize, item.RateOfFireMin, item.RateOfFireMax,
+        item.CooldownSeconds, item.CooldownGroup, item.IsActive
     };
 
     private static AdminMutationResult InvalidItem() => AdminMutationResult.Failure(

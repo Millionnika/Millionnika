@@ -219,6 +219,126 @@ public sealed class InventoryServiceIntegrationTests
         });
     }
 
+    [Fact]
+    public async Task SharedCooldown_RejectsSecondItemWithoutSpending_ThenAllowsAfterExpiry()
+    {
+        await WithPlayerAsync(100, async player =>
+        {
+            var firstId = Guid.NewGuid();
+            var secondId = Guid.NewGuid();
+            await AddCooldownItemsAsync(player.CharacterId, firstId, secondId);
+            await using (var db = CreateDbContext())
+            {
+                var first = await CreateService(db).UseAsync(player.UserId, Guid.NewGuid(), firstId, 1, default);
+                Assert.True(first.Response.Succeeded);
+                Assert.InRange(first.Response.CooldownRemainingSeconds, 1, 60);
+            }
+            await using (var db = CreateDbContext())
+            {
+                var waiting = await CreateService(db).UseAsync(player.UserId, Guid.NewGuid(), secondId, 1, default);
+                Assert.True(waiting.Rejected);
+                Assert.Contains("Осталось", waiting.Response.Message);
+                Assert.InRange(waiting.Response.CooldownRemainingSeconds, 1, 60);
+                Assert.Equal(2, waiting.Response.InventoryQuantity);
+                Assert.Equal(60, waiting.Response.Resources.Health);
+            }
+            await using (var db = CreateDbContext())
+            {
+                var listed = await CreateService(db).GetInventoryAsync(player.UserId, default);
+                Assert.NotNull(listed.Single(item => item.ItemId == secondId).CooldownAvailableAtUtc);
+                var timer = await db.ConsumableCooldowns.SingleAsync(value => value.CharacterId == player.CharacterId);
+                timer.AvailableAtUtc = DateTimeOffset.UtcNow.AddSeconds(-1);
+                await db.SaveChangesAsync();
+            }
+            await using (var db = CreateDbContext())
+            {
+                var second = await CreateService(db).UseAsync(player.UserId, Guid.NewGuid(), secondId, 1, default);
+                Assert.True(second.Response.Succeeded);
+                Assert.Equal(80, second.Response.Resources.Health);
+            }
+        });
+    }
+
+    [Fact]
+    public async Task Cooldown_RequiresSingleItem_AndRepeatedRequestDoesNotResetTimer()
+    {
+        await WithPlayerAsync(100, async player =>
+        {
+            var firstId = Guid.NewGuid();
+            var secondId = Guid.NewGuid();
+            await AddCooldownItemsAsync(player.CharacterId, firstId, secondId);
+            await using (var db = CreateDbContext())
+            {
+                var rejected = await CreateService(db).UseAsync(player.UserId, Guid.NewGuid(), firstId, 2, default);
+                Assert.True(rejected.Rejected);
+                Assert.Equal(2, rejected.Response.InventoryQuantity);
+            }
+            var requestId = Guid.NewGuid();
+            DateTimeOffset initial;
+            await using (var db = CreateDbContext())
+            {
+                var first = await CreateService(db).UseAsync(player.UserId, requestId, firstId, 1, default);
+                Assert.True(first.Response.Succeeded);
+                initial = await db.ConsumableCooldowns.Where(value => value.CharacterId == player.CharacterId)
+                    .Select(value => value.AvailableAtUtc).SingleAsync();
+            }
+            await using (var db = CreateDbContext())
+            {
+                var replay = await CreateService(db).UseAsync(player.UserId, requestId, firstId, 1, default);
+                Assert.True(replay.Response.Replayed);
+                Assert.True(replay.Response.Succeeded);
+                var stored = await db.ConsumableCooldowns.Where(value => value.CharacterId == player.CharacterId)
+                    .Select(value => value.AvailableAtUtc).SingleAsync();
+                Assert.Equal(initial, stored);
+                Assert.Equal(1, replay.Response.InventoryQuantity);
+            }
+        });
+    }
+
+    [Fact]
+    public async Task ParallelSharedCooldown_AllowsOnlyOneUse()
+    {
+        await WithPlayerAsync(100, async player =>
+        {
+            var firstId = Guid.NewGuid();
+            var secondId = Guid.NewGuid();
+            await AddCooldownItemsAsync(player.CharacterId, firstId, secondId);
+            await using var firstDb = CreateDbContext();
+            await using var secondDb = CreateDbContext();
+            var results = await Task.WhenAll(
+                CreateService(firstDb).UseAsync(player.UserId, Guid.NewGuid(), firstId, 1, default),
+                CreateService(secondDb).UseAsync(player.UserId, Guid.NewGuid(), secondId, 1, default));
+            Assert.Single(results, result => result.Response.Succeeded);
+            await using var db = CreateDbContext();
+            Assert.Equal(3, await db.InventoryItems.Where(value => value.CharacterId == player.CharacterId)
+                .SumAsync(value => value.Quantity));
+            Assert.Equal(60, await db.Characters.Where(value => value.Id == player.CharacterId)
+                .Select(value => value.Health).SingleAsync());
+        });
+    }
+
+    private static async Task AddCooldownItemsAsync(Guid characterId, Guid firstId, Guid secondId)
+    {
+        await using var db = CreateDbContext();
+        foreach (var id in new[] { firstId, secondId })
+        {
+            db.Items.Add(new Item
+            {
+                Id = id, Name = $"Тестовый гель {id:N}", Description = "Только для теста",
+                Price = 1, Type = ItemTypes.Consumable, IsActive = true,
+                EffectResource = "health", EffectAmount = 20,
+                CooldownSeconds = 60, CooldownGroup = "medical_test"
+            });
+            db.InventoryItems.Add(new PlayerInventoryItem
+            {
+                Id = Guid.NewGuid(), CharacterId = characterId, ItemId = id, Quantity = 2
+            });
+        }
+        var character = await db.Characters.SingleAsync(value => value.Id == characterId);
+        character.Health = 40;
+        await db.SaveChangesAsync();
+    }
+
     private static async Task WithPlayerAsync(long credits, Func<TestPlayer, Task> test)
     {
         var userId = Guid.NewGuid();
@@ -266,7 +386,11 @@ public sealed class InventoryServiceIntegrationTests
         finally
         {
             await using var cleanupDb = CreateDbContext();
+            var temporaryItemIds = await cleanupDb.InventoryItems
+                .Where(entry => entry.CharacterId == characterId && entry.Item.Name.StartsWith("Тестовый гель "))
+                .Select(entry => entry.ItemId).ToListAsync();
             await cleanupDb.Users.Where(user => user.Id == userId).ExecuteDeleteAsync();
+            await cleanupDb.Items.Where(item => temporaryItemIds.Contains(item.Id)).ExecuteDeleteAsync();
         }
     }
 

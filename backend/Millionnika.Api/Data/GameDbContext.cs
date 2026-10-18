@@ -13,6 +13,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
     public DbSet<ActionLog> ActionLogs => Set<ActionLog>();
     public DbSet<Item> Items => Set<Item>();
     public DbSet<PlayerInventoryItem> InventoryItems => Set<PlayerInventoryItem>();
+    public DbSet<ConsumableCooldown> ConsumableCooldowns => Set<ConsumableCooldown>();
     public DbSet<EquipmentInstance> EquipmentInstances => Set<EquipmentInstance>();
     public DbSet<AdminAuditLog> AdminAuditLogs => Set<AdminAuditLog>();
     public DbSet<FriendRelation> FriendRelations => Set<FriendRelation>();
@@ -106,6 +107,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
                 table.HasCheckConstraint("CK_items_EffectAmount", "(\"Type\" = 'consumable' AND \"EffectAmount\" > 0) OR (\"Type\" IN ('weapon','armor','ammunition') AND \"EffectAmount\" = 0)");
                 table.HasCheckConstraint("CK_items_EquipmentRatings", "\"MinimumDamage\" BETWEEN 0 AND 1000 AND \"MaximumDamage\" BETWEEN \"MinimumDamage\" AND 1000 AND \"MinimumAccuracy\" BETWEEN 0 AND 100 AND \"MaximumAccuracy\" BETWEEN \"MinimumAccuracy\" AND 100 AND \"MinimumArmor\" BETWEEN 0 AND 100 AND \"MaximumArmor\" BETWEEN \"MinimumArmor\" AND 100");
                 table.HasCheckConstraint("CK_items_Ammo", "\"ClipSize\" BETWEEN 0 AND 1000 AND \"RateOfFireMin\" BETWEEN 0 AND 1000 AND \"RateOfFireMax\" BETWEEN \"RateOfFireMin\" AND 1000");
+                table.HasCheckConstraint("CK_items_Cooldown", "\"CooldownSeconds\" BETWEEN 0 AND 86400 AND ((\"Type\" = 'consumable' AND ((\"CooldownSeconds\" = 0 AND \"CooldownGroup\" = '') OR (\"CooldownSeconds\" > 0 AND \"CooldownGroup\" <> ''))) OR (\"Type\" <> 'consumable' AND \"CooldownSeconds\" = 0 AND \"CooldownGroup\" = ''))");
             });
             entity.HasKey(item => item.Id);
             entity.Property(item => item.Name).HasMaxLength(120).IsRequired();
@@ -121,6 +123,7 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
             entity.Property(item => item.MaximumArmor).HasPrecision(5, 2);
             entity.Property(item => item.ArmorCoverage).HasColumnType("jsonb").IsRequired();
             entity.Property(item => item.Caliber).HasMaxLength(40).IsRequired();
+            entity.Property(item => item.CooldownGroup).HasMaxLength(64).IsRequired();
             entity.HasData(
                 new Item
                 {
@@ -155,6 +158,15 @@ public sealed class GameDbContext(DbContextOptions<GameDbContext> options) : DbC
                     EffectResource = "health",
                     EffectAmount = 20
                 });
+        });
+
+        modelBuilder.Entity<ConsumableCooldown>(entity =>
+        {
+            entity.ToTable("consumable_cooldowns");
+            entity.HasKey(value => new { value.CharacterId, value.Group });
+            entity.Property(value => value.Group).HasMaxLength(64).IsRequired();
+            entity.HasOne<GameCharacter>().WithMany().HasForeignKey(value => value.CharacterId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<PlayerInventoryItem>(entity =>

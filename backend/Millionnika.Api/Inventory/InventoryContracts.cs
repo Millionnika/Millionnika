@@ -21,7 +21,8 @@ public sealed record ShopItemResponse(
     decimal MinimumArmor,
     decimal MaximumArmor,
     string ArmorCoverage,
-    string Caliber, int ClipSize, int RateOfFireMin, int RateOfFireMax);
+    string Caliber, int ClipSize, int RateOfFireMin, int RateOfFireMax,
+    int CooldownSeconds, string CooldownGroup);
 
 public sealed record InventoryItemResponse(
     Guid ItemId,
@@ -38,7 +39,8 @@ public sealed record InventoryItemResponse(
     string? EquippedSlot,
     string AllowedSlots,
     string ArmorCoverage,
-    string Caliber, int ClipSize, int RateOfFireMin, int RateOfFireMax);
+    string Caliber, int ClipSize, int RateOfFireMin, int RateOfFireMax,
+    int CooldownSeconds, string CooldownGroup, DateTimeOffset? CooldownAvailableAtUtc);
 
 public sealed record InventoryResourcesResponse(
     int Energy,
@@ -55,6 +57,7 @@ public sealed record InventoryActionResponse(
     string Message,
     long Credits,
     int InventoryQuantity,
-    InventoryResourcesResponse Resources);
+    InventoryResourcesResponse Resources,
+    int CooldownRemainingSeconds = 0);
 
 public sealed record InventoryActionResult(InventoryActionResponse Response, bool Rejected);

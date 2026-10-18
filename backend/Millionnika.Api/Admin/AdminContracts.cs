@@ -26,13 +26,15 @@ public sealed record UpdateItemRequest(
     decimal MinimumDamage = 0, decimal MaximumDamage = 0,
     decimal MinimumAccuracy = 0, decimal MaximumAccuracy = 0,
     decimal MinimumArmor = 0, decimal MaximumArmor = 0, string ArmorCoverage = "{}",
-    string Caliber = "", int ClipSize = 0, int RateOfFireMin = 0, int RateOfFireMax = 0);
+    string Caliber = "", int ClipSize = 0, int RateOfFireMin = 0, int RateOfFireMax = 0,
+    int CooldownSeconds = 0, string? CooldownGroup = null);
 public sealed record CreateItemRequest(
     string? Name, string? Description, long Price, string Type, string? EffectResource,
     int EffectAmount, string AllowedSlots, decimal MinimumDamage, decimal MaximumDamage,
     decimal MinimumAccuracy, decimal MaximumAccuracy, decimal MinimumArmor, decimal MaximumArmor,
     string ArmorCoverage, bool IsActive, string? Reason,
-    string Caliber = "", int ClipSize = 0, int RateOfFireMin = 0, int RateOfFireMax = 0);
+    string Caliber = "", int ClipSize = 0, int RateOfFireMin = 0, int RateOfFireMax = 0,
+    int CooldownSeconds = 0, string? CooldownGroup = null);
 
 public sealed record AdminContractResponse(
     Guid Id, string Name, string Description, int CostNerve, decimal SuccessChance,
@@ -44,7 +46,8 @@ public sealed record AdminItemResponse(
     string EffectResource, int EffectAmount, bool IsActive, string AllowedSlots,
     decimal MinimumDamage, decimal MaximumDamage, decimal MinimumAccuracy, decimal MaximumAccuracy,
     decimal MinimumArmor, decimal MaximumArmor, string ArmorCoverage,
-    string Caliber, int ClipSize, int RateOfFireMin, int RateOfFireMax);
+    string Caliber, int ClipSize, int RateOfFireMin, int RateOfFireMax,
+    int CooldownSeconds, string CooldownGroup);
 
 public sealed record AdminActionLogResponse(
     Guid Id, string Username, string ActionType, bool Succeeded, string Message, DateTimeOffset CreatedAtUtc);

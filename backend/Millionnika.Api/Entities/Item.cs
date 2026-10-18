@@ -10,6 +10,8 @@ public sealed class Item
     public bool IsActive { get; set; }
     public string EffectResource { get; set; } = string.Empty;
     public int EffectAmount { get; set; }
+    public int CooldownSeconds { get; set; }
+    public string CooldownGroup { get; set; } = string.Empty;
     public string AllowedSlots { get; set; } = string.Empty;
     public decimal MinimumDamage { get; set; }
     public decimal MaximumDamage { get; set; }

@@ -25,7 +25,8 @@ public sealed class InventoryService(
                 item.EffectResource, item.EffectAmount, item.AllowedSlots,
                 item.MinimumDamage, item.MaximumDamage, item.MinimumAccuracy, item.MaximumAccuracy,
                 item.MinimumArmor, item.MaximumArmor, item.ArmorCoverage,
-                item.Caliber, item.ClipSize, item.RateOfFireMin, item.RateOfFireMax))
+                item.Caliber, item.ClipSize, item.RateOfFireMin, item.RateOfFireMax,
+                item.CooldownSeconds, item.CooldownGroup))
             .ToListAsync(cancellationToken);
 
     public async Task<IReadOnlyList<InventoryItemResponse>> GetInventoryAsync(
@@ -39,7 +40,8 @@ public sealed class InventoryService(
                 entry.ItemId, entry.Item.Name, entry.Item.Description, entry.Item.Type,
                 entry.Item.EffectResource, entry.Item.EffectAmount, entry.Quantity, null,
                 0, 0, 0, null, entry.Item.AllowedSlots, entry.Item.ArmorCoverage,
-                entry.Item.Caliber, entry.Item.ClipSize, entry.Item.RateOfFireMin, entry.Item.RateOfFireMax))
+                entry.Item.Caliber, entry.Item.ClipSize, entry.Item.RateOfFireMin, entry.Item.RateOfFireMax,
+                entry.Item.CooldownSeconds, entry.Item.CooldownGroup, null))
             .ToListAsync(cancellationToken);
         var equipment = await dbContext.EquipmentInstances.AsNoTracking()
             .Where(instance => instance.Character.UserId == userId)
@@ -49,9 +51,16 @@ public sealed class InventoryService(
                 instance.Item.EffectResource, instance.Item.EffectAmount, 1, instance.Id,
                 instance.Damage, instance.Accuracy, instance.Armor, instance.EquippedSlot,
                 instance.Item.AllowedSlots, instance.Item.ArmorCoverage,
-                instance.Item.Caliber, instance.Item.ClipSize, instance.Item.RateOfFireMin, instance.Item.RateOfFireMax))
+                instance.Item.Caliber, instance.Item.ClipSize, instance.Item.RateOfFireMin, instance.Item.RateOfFireMax,
+                instance.Item.CooldownSeconds, instance.Item.CooldownGroup, null))
             .ToListAsync(cancellationToken);
-        return consumables.Concat(equipment).ToList();
+        var cooldowns = await dbContext.ConsumableCooldowns.AsNoTracking()
+            .Where(value => dbContext.Characters.Any(character => character.Id == value.CharacterId && character.UserId == userId))
+            .ToDictionaryAsync(value => value.Group, value => value.AvailableAtUtc, cancellationToken);
+        return consumables.Select(item => item with
+        {
+            CooldownAvailableAtUtc = item.CooldownSeconds > 0 && cooldowns.TryGetValue(item.CooldownGroup, out var until) && until > resourceRecovery.UtcNow ? until : null
+        }).Concat(equipment).ToList();
     }
 
     public async Task<InventoryActionResult> BuyAsync(
@@ -174,6 +183,8 @@ public sealed class InventoryService(
         var inventory = await dbContext.InventoryItems.SingleOrDefaultAsync(
             entry => entry.CharacterId == character.Id && entry.ItemId == itemId,
             cancellationToken);
+        var cooldownRemaining = item is { CooldownSeconds: > 0 }
+            ? await GetCooldownRemainingAsync(character.Id, item.CooldownGroup, cancellationToken) : 0;
         ActionLog log;
 
         if (await HasActiveHuntAsync(character.Id, cancellationToken))
@@ -186,10 +197,20 @@ public sealed class InventoryService(
             log = CreateLog(userId, requestId, UseAction, signature, false,
                 "Этот предмет нельзя использовать.", "item_unavailable", itemId, quantity);
         }
+        else if (item.CooldownSeconds > 0 && quantity != 1)
+        {
+            log = CreateLog(userId, requestId, UseAction, signature, false,
+                "Предмет с ожиданием можно использовать только по одной штуке.", "cooldown_single_item", itemId, quantity);
+        }
         else if (inventory is null || !ShopRules.HasEnoughItems(inventory.Quantity, quantity))
         {
             log = CreateLog(userId, requestId, UseAction, signature, false,
                 "Недостаточно предметов в инвентаре.", "insufficient_items", itemId, quantity);
+        }
+        else if (cooldownRemaining > 0)
+        {
+            log = CreateLog(userId, requestId, UseAction, signature, false,
+                $"Предмет пока недоступен. Осталось {cooldownRemaining} с.", "item_cooldown", itemId, quantity);
         }
         else if (!TryApplyEffect(character, item, quantity, out var resourceWasFull))
         {
@@ -203,6 +224,19 @@ public sealed class InventoryService(
             if (inventory.Quantity == 0)
             {
                 dbContext.InventoryItems.Remove(inventory);
+            }
+
+            if (item.CooldownSeconds > 0)
+            {
+                var cooldown = await dbContext.ConsumableCooldowns.SingleOrDefaultAsync(
+                    value => value.CharacterId == character.Id && value.Group == item.CooldownGroup, cancellationToken);
+                if (cooldown is null)
+                    dbContext.ConsumableCooldowns.Add(new ConsumableCooldown
+                    {
+                        CharacterId = character.Id, Group = item.CooldownGroup,
+                        AvailableAtUtc = resourceRecovery.UtcNow.AddSeconds(item.CooldownSeconds)
+                    });
+                else cooldown.AvailableAtUtc = resourceRecovery.UtcNow.AddSeconds(item.CooldownSeconds);
             }
 
             log = CreateLog(userId, requestId, UseAction, signature, true,
@@ -315,9 +349,26 @@ public sealed class InventoryService(
               await dbContext.EquipmentInstances.AsNoTracking()
                 .CountAsync(entry => entry.CharacterId == character.Id && entry.ItemId == log.ItemId, cancellationToken);
 
+        var cooldownRemaining = 0;
+        if (log.ActionType == UseAction && log.ItemId is { } itemId)
+        {
+            var group = await dbContext.Items.AsNoTracking().Where(item => item.Id == itemId)
+                .Select(item => item.CooldownGroup).SingleOrDefaultAsync(cancellationToken);
+            if (!string.IsNullOrEmpty(group))
+                cooldownRemaining = await GetCooldownRemainingAsync(character.Id, group, cancellationToken);
+        }
+
         return new InventoryActionResult(
-            CreateResponse(log.RequestId, replayed, log.Succeeded, log.Message, character, inventoryQuantity),
+            CreateResponse(log.RequestId, replayed, log.Succeeded, log.Message, character, inventoryQuantity, cooldownRemaining),
             !log.Succeeded);
+    }
+
+    private async Task<int> GetCooldownRemainingAsync(Guid characterId, string group, CancellationToken cancellationToken)
+    {
+        var availableAt = await dbContext.ConsumableCooldowns.AsNoTracking()
+            .Where(value => value.CharacterId == characterId && value.Group == group)
+            .Select(value => (DateTimeOffset?)value.AvailableAtUtc).SingleOrDefaultAsync(cancellationToken);
+        return availableAt is null ? 0 : (int)Math.Max(0, Math.Ceiling((availableAt.Value - resourceRecovery.UtcNow).TotalSeconds));
     }
 
     private static InventoryActionResponse CreateResponse(
@@ -326,7 +377,8 @@ public sealed class InventoryService(
         bool succeeded,
         string message,
         GameCharacter character,
-        int inventoryQuantity) =>
+        int inventoryQuantity,
+        int cooldownRemainingSeconds = 0) =>
         new(
             requestId,
             replayed,
@@ -337,7 +389,7 @@ public sealed class InventoryService(
             new InventoryResourcesResponse(
                 character.Energy, character.MaxEnergy,
                 character.Nerve, character.MaxNerve,
-                character.Health, character.MaxHealth));
+                character.Health, character.MaxHealth), cooldownRemainingSeconds);
 
     private static bool TryApplyEffect(
         GameCharacter character,

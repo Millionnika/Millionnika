@@ -41,7 +41,7 @@ public static class EquipmentRules
     public static readonly HashSet<string> CoverageParts = new(StringComparer.Ordinal)
         { "head", "throat", "heart", "chest", "stomach", "arms", "hands", "groin", "legs", "feet" };
 
-    public static bool IsDefinitionValid(Item item) => item.Type switch
+    public static bool IsDefinitionValid(Item item) => CooldownIsValid(item) && (item.Type switch
     {
         ItemTypes.Consumable => item.AllowedSlots == string.Empty && item.EffectResource is "energy" or "nerve" or "health" &&
             item.EffectAmount > 0 && RatingsAreZero(item) && item.ArmorCoverage == "{}" && NoAmmo(item),
@@ -59,7 +59,13 @@ public static class EquipmentRules
             item.MaximumAccuracy == 0 && item.EffectAmount == 0 && item.EffectResource == string.Empty &&
             IsCoverageValid(item.ArmorCoverage) && NoAmmo(item),
         _ => false
-    };
+    });
+
+    private static bool CooldownIsValid(Item item) =>
+        item.CooldownSeconds is >= 0 and <= 86400 &&
+        (item.CooldownSeconds == 0 ? item.CooldownGroup.Length == 0 :
+            item.Type == ItemTypes.Consumable && item.CooldownGroup.Length is >= 1 and <= 64 &&
+            item.CooldownGroup.All(character => char.IsAsciiLetterLower(character) || char.IsAsciiDigit(character) || character is '_' or '-'));
 
     public static bool IsCoverageValid(string? json)
     {

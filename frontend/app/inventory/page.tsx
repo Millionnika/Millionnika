@@ -12,6 +12,7 @@ type InventoryItem = {
   effectResource: string; effectAmount: number; quantity: number; damage: number; accuracy: number;
   armor: number; equippedSlot: string | null; allowedSlots: string; armorCoverage: string;
   caliber: string; clipSize: number; rateOfFireMin: number; rateOfFireMax: number;
+  cooldownSeconds: number; cooldownGroup: string; cooldownAvailableAtUtc: string | null;
 };
 type ActionResult = { succeeded: boolean; message: string };
 type InventoryFilter = "all" | "weapon" | "armor" | "ammunition" | "consumable";
@@ -35,6 +36,7 @@ export default function InventoryPage() {
   const [message, setMessage] = useState<ActionResult | null>(null);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<InventoryFilter>("all");
+  const [now, setNow] = useState(() => Date.now());
 
   const visibleItems = useMemo(() => items.filter((item) => filter === "all" || item.type === filter), [filter, items]);
 
@@ -46,6 +48,7 @@ export default function InventoryPage() {
   }, [router]);
 
   useEffect(() => { void loadData().catch(() => setError("Не удалось загрузить инвентарь.")); }, [loadData]);
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
 
   async function perform(path: string, actionType: string, parameters: object, busy: string) {
     setError(""); setMessage(null); setBusyKey(busy);
@@ -66,7 +69,7 @@ export default function InventoryPage() {
   }
 
   function useItem(item: InventoryItem) {
-    const quantity = quantities[item.itemId] ?? 1;
+    const quantity = item.cooldownSeconds > 0 ? 1 : quantities[item.itemId] ?? 1;
     return perform("/api/game/inventory/use", "item_use", { itemId: item.itemId, quantity }, item.itemId);
   }
 
@@ -90,12 +93,14 @@ export default function InventoryPage() {
         {visibleItems.map((item) => {
           const key = item.instanceId ?? item.itemId;
           const slots = item.allowedSlots.split(",").filter(Boolean);
+          const remaining = item.cooldownAvailableAtUtc ? Math.max(0, Math.ceil((Date.parse(item.cooldownAvailableAtUtc) - now) / 1000)) : 0;
           return <article className="inventory-card" key={key}>
             <div className={`inventory-item-icon ${item.type}`} aria-hidden="true">{typeIcon(item.type)}</div>
             <div className="inventory-card-body"><div className="inventory-card-heading"><h2>{item.name}</h2><strong>{item.type === "weapon" ? `Урон ${item.damage} · Точность ${item.accuracy}` : item.type === "armor" ? `Броня ${item.armor}` : `В наличии: ${item.quantity}`}</strong></div><p>{item.description}</p>
             {item.type === "ammunition" ? <p className="inventory-meta">Калибр: {item.caliber}</p> : item.type === "consumable" ? <div className="inventory-consume">
-              <label><span>Количество</span><input type="number" min="1" max={Math.min(100, item.quantity)} value={quantities[item.itemId] ?? 1} onChange={(event) => setQuantities((current) => ({ ...current, [item.itemId]: Number(event.target.value) }))} /></label>
-              <button className="primary-button compact-action" type="button" onClick={() => void useItem(item)} disabled={busyKey !== null}>{busyKey === item.itemId ? "Использование…" : "Использовать"}</button>
+              <label><span>Количество</span><input type="number" min="1" max={item.cooldownSeconds > 0 ? 1 : Math.min(100, item.quantity)} value={item.cooldownSeconds > 0 ? 1 : quantities[item.itemId] ?? 1} disabled={item.cooldownSeconds > 0} onChange={(event) => setQuantities((current) => ({ ...current, [item.itemId]: Number(event.target.value) }))} /></label>
+              <button className="primary-button compact-action" type="button" onClick={() => void useItem(item)} disabled={busyKey !== null || remaining > 0}>{busyKey === item.itemId ? "Использование…" : "Использовать"}</button>
+              {remaining > 0 && <span className="inventory-meta" role="status">Доступно через {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, "0")}</span>}
             </div> : <>
               {item.type === "armor" && <p className="inventory-meta">Покрытие: {formatCoverage(item.armorCoverage)}</p>}
               <div className="inventory-card-actions">
